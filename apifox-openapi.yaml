@@ -1,0 +1,2744 @@
+openapi: 3.0.3
+info:
+  title: UVERA API
+  version: 1.3.0
+  description: |
+    UVERA 项目接口文档,根据 public/_worker.js 与前端调用整理,可导入 Apifox。
+
+    说明:
+    - 主站后端运行在 Cloudflare Workers + Static Assets,生产域名为 https://uvera.ai。
+    - 普通登录态接口使用 Supabase JWT: Authorization: Bearer <access_token>。
+    - Admin 接口要求登录用户 user_metadata.is_admin=true;部分脚本接口也支持 X-Admin-API-Token。
+    - Stripe webhook 使用 Stripe-Signature。
+    - 代理/透传类接口的响应字段由上游服务决定,文档中以 additionalProperties 标注。
+servers:
+  - url: http://localhost:5176
+    description: Vite dev server, /api 代理到线上 Worker
+  - url: https://uvera.ai
+    description: Production Worker
+
+tags:
+  - name: Proxy
+    description: 第三方代理与对象上传代理
+  - name: AI Generation
+    description: OpenAI/Gemini/BytePlus 生成相关接口
+  - name: Video
+    description: 视频任务、Cloudflare Stream、下载与素材代理
+  - name: Series Paywall
+    description: 短剧保存、发布、购买、解锁与访问判断
+  - name: Wallet
+    description: Token/U-Coin 钱包与奖励
+  - name: Stripe
+    description: 订阅、Checkout、Customer Portal 与 webhook
+  - name: User Uploads
+    description: 用户视频上传与审核
+  - name: Admin Users
+    description: 后台用户与角色
+  - name: Admin Orders
+    description: 后台订单、退款、对账
+  - name: Admin Content
+    description: 内容举报、帮助文章、开发日志、TeamChat
+  - name: Admin System
+    description: 系统设置、模型测试、迁移工具
+  - name: Public
+    description: 公开读取接口与静态大文件
+
+paths:
+  /neodomain-api/{proxyPath}:
+    parameters:
+      - $ref: '#/components/parameters/ProxyPath'
+    get:
+      tags: [Proxy]
+      summary: Neodomain API 透传代理
+      description: 将请求透传到 https://dev.neodomain.cn,用于绕过浏览器 CORS/WAF。路径前缀会被移除。
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/ProxyResponse'
+    post:
+      tags: [Proxy]
+      summary: Neodomain API 透传代理
+      description: 请求体与响应体由 Neodomain 上游决定。
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/AnyJson'
+      responses:
+        '200':
+          $ref: '#/components/responses/ProxyResponse'
+
+  /neodomain-story-api/{proxyPath}:
+    parameters:
+      - $ref: '#/components/parameters/ProxyPath'
+    get:
+      tags: [Proxy]
+      summary: Neodomain Story API 透传代理
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/ProxyResponse'
+    post:
+      tags: [Proxy]
+      summary: Neodomain Story API 透传代理
+      security: []
+      requestBody:
+        $ref: '#/components/requestBodies/AnyJson'
+      responses:
+        '200':
+          $ref: '#/components/responses/ProxyResponse'
+
+  /api/neo-oss-sts:
+    get:
+      tags: [Proxy]
+      summary: 获取 Neodomain OSS STS Token
+      description: 服务端代请求 Neodomain STS 网关。需要 Authorization 或 accesstoken header。
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationOptional'
+        - name: accesstoken
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Neodomain STS JSON 透传
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Missing token
+
+  /api/oss-put/{objectKey}:
+    put:
+      tags: [Proxy]
+      summary: 代理上传到 OSS
+      description: 透传 PUT 到 OSS,路径中的 objectKey 为对象 key。需要 x-oss-security-token 与 Authorization。
+      security: []
+      parameters:
+        - name: objectKey
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-oss-security-token
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          $ref: '#/components/responses/ProxyResponse'
+
+  /api/upload/{objectKey}:
+    put:
+      tags: [Proxy]
+      summary: 上传文件到 R2
+      description: 通过 Worker 写入 Cloudflare R2,返回公开访问 URL。
+      security: []
+      parameters:
+        - name: objectKey
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Content-Type
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  publicUrl: { type: string, format: uri }
+                  objectKey: { type: string }
+    post:
+      tags: [Proxy]
+      summary: 上传文件到 R2
+      security: []
+      parameters:
+        - name: objectKey
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResult'
+
+  /api/mirror-to-r2:
+    post:
+      tags: [Proxy]
+      summary: 下载远端图片并镜像到 R2
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceUrl]
+              properties:
+                sourceUrl:
+                  type: string
+                  format: uri
+                  description: 原始图片地址
+                accessToken:
+                  type: string
+                  description: 可选 Neodomain token,会作为 Authorization/accesstoken 请求源图
+      responses:
+        '200':
+          description: 镜像成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResult'
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /api/proxy-asset:
+    get:
+      tags: [Proxy]
+      summary: 素材下载代理
+      description: 用于绕过素材 URL CORS,常用于 FFmpeg 合并视频。
+      security: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '200':
+          description: 原始二进制素材
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /api/proxy-image:
+    get:
+      tags: [Proxy]
+      summary: 图片代理
+      description: 代理图片读取,响应为图片二进制。
+      security: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+      responses:
+        '200':
+          description: 图片二进制
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+
+  /api/generate-storyboard:
+    post:
+      tags: [AI Generation]
+      summary: 生成故事板/概念图
+      description: 使用 OpenAI 图片模型生成故事板或概念图,成功后上传到 R2 并写 generation_logs。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateStoryboardRequest'
+      responses:
+        '200':
+          description: 生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageGenerationResponse'
+        '401':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /api/generate-image:
+    post:
+      tags: [AI Generation]
+      summary: Free Mode 多模态出图
+      description: 面向 Free Mode 的多参考图生成接口,服务端计费并记录日志。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string, description: 出图提示词 }
+                referenceImageUrls:
+                  type: array
+                  items: { type: string, format: uri }
+                quality:
+                  type: string
+                  enum: [low, medium, high, auto]
+                  default: medium
+                size:
+                  type: string
+                  example: 1536x1024
+                renderSessionId: { type: string }
+      responses:
+        '200':
+          description: 生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageGenerationResponse'
+        '402':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /api/generate-character-board:
+    post:
+      tags: [AI Generation]
+      summary: 生成角色设定板
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string }
+                sourceImageUrl: { type: string, format: uri }
+                style: { type: string }
+                protagonist:
+                  type: object
+                  additionalProperties: true
+                renderSessionId: { type: string }
+      responses:
+        '200':
+          description: 生成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageGenerationResponse'
+
+  /api/describe-image:
+    post:
+      tags: [AI Generation]
+      summary: 描述图片内容
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl]
+              properties:
+                imageUrl: { type: string, format: uri }
+                prompt: { type: string, description: 可选补充问题 }
+      responses:
+        '200':
+          description: 图片描述
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  description: { type: string }
+                  errMessage: { type: string }
+
+  /api/extract-photo-demographics:
+    post:
+      tags: [AI Generation]
+      summary: 提取人物照片特征
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl]
+              properties:
+                imageUrl: { type: string, format: uri }
+      responses:
+        '200':
+          description: 人物特征
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  demographics:
+                    type: object
+                    additionalProperties: true
+                  errMessage: { type: string }
+
+  /api/generate-ideas:
+    post:
+      tags: [AI Generation]
+      summary: 随机生成创意点子
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string }
+                count: { type: integer, default: 3 }
+                topic: { type: string }
+      responses:
+        '200':
+          description: 创意列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  ideas:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/optimize-prompt:
+    post:
+      tags: [AI Generation]
+      summary: 优化提示词
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt: { type: string }
+                mode: { type: string }
+                style: { type: string }
+      responses:
+        '200':
+          description: 优化后的提示词
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  prompt: { type: string }
+                  optimizedPrompt: { type: string }
+
+  /api/expand-character-seed:
+    post:
+      tags: [AI Generation]
+      summary: 扩展角色种子设定
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seed]
+              properties:
+                seed: { type: string }
+                style: { type: string }
+      responses:
+        '200':
+          description: 扩展结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  characterSeed: { type: string }
+                  result: { type: string }
+
+  /api/generate-multi-segment-script:
+    post:
+      tags: [AI Generation]
+      summary: 生成多段视频脚本
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transcript: { type: string }
+                prompt: { type: string }
+                videoType: { type: string }
+                segmentCount: { type: integer }
+                duration: { type: integer }
+                style: { type: string }
+                characterSeed: { type: string }
+      responses:
+        '200':
+          description: 脚本生成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  script:
+                    type: object
+                    additionalProperties: true
+                  segments:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/byteplus/certify-asset:
+    post:
+      tags: [AI Generation]
+      summary: 上传素材到 BytePlus Trusted Asset Library
+      description: 将图片/视频 URL 注册为 BytePlus 私有 asset URI,用于真实人物/敏感内容回退。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                type:
+                  type: string
+                  enum: [Image, Video]
+                  default: Image
+      responses:
+        '200':
+          description: 认证成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  assetUri: { type: string }
+
+  /api/volcengine/video/submit:
+    post:
+      tags: [Video]
+      summary: 提交 BytePlus/Volcengine 视频生成任务
+      description: 登录必需。服务端按模型/分辨率/时长原子扣 Token,提交 Ark 任务,返回 taskId。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoSubmitRequest'
+      responses:
+        '200':
+          description: 提交成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  taskId: { type: string }
+                  usedImage: { type: boolean }
+                  chargedCredits: { type: integer }
+                  chargedTokens: { type: integer }
+                  renderSessionId: { type: string }
+        '401':
+          $ref: '#/components/responses/Error'
+        '402':
+          $ref: '#/components/responses/Error'
+
+  /api/volcengine/video/status/{taskId}:
+    get:
+      tags: [Video]
+      summary: 查询视频生成任务状态
+      security: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 任务状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: succeeded/failed/running 等上游状态
+                  videoUrl: { type: string, format: uri }
+                  taskId: { type: string }
+                  error: { type: string }
+                  raw:
+                    type: object
+                    additionalProperties: true
+
+  /api/video/reconcile-stuck:
+    post:
+      tags: [Video]
+      summary: 兜底修复卡住的视频任务
+      description: 前端关页后用于根据 renderSessionId/taskId 继续查询任务并退款/补写日志。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                renderSessionId: { type: string }
+                taskId: { type: string }
+      responses:
+        '200':
+          description: 修复结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  reconciled: { type: boolean }
+                  status: { type: string }
+                  videoUrl: { type: string, format: uri }
+
+  /api/video-models:
+    get:
+      tags: [Video]
+      summary: 获取可用视频模型与价格配置
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 模型列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  models:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        label: { type: string }
+                        maxResolution: { type: string }
+                        costMultiplier: { type: number }
+                  defaultModel: { type: string }
+
+  /api/stream/direct_upload:
+    post:
+      tags: [Video]
+      summary: 创建 Cloudflare Stream direct_upload URL
+      security: []
+      responses:
+        '200':
+          description: Cloudflare direct_upload 返回
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/stream/upload-from-url:
+    post:
+      tags: [Video]
+      summary: 从远端 URL 上传到 Cloudflare Stream
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [videoUrl]
+              properties:
+                videoUrl: { type: string, format: uri }
+                title: { type: string }
+                thumbnailTimestampPct: { type: number, minimum: 0, maximum: 1 }
+                renderSessionId: { type: string }
+      responses:
+        '200':
+          description: 上传结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  uid: { type: string }
+                  streamUrl: { type: string, format: uri }
+                  thumbnailUrl: { type: string, format: uri }
+
+  /api/stream/enable-download:
+    post:
+      tags: [Video]
+      summary: 为 Cloudflare Stream 视频生成 MP4 下载
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uid]
+              properties:
+                uid: { type: string, description: Cloudflare Stream UID }
+      responses:
+        '200':
+          description: 下载状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  status:
+                    type: string
+                    enum: [ready, inprogress, error]
+                  url: { type: string, format: uri }
+                  percentComplete: { type: number }
+
+  /api/stream/download-proxy:
+    get:
+      tags: [Video]
+      summary: Stream MP4 下载代理
+      security: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: filename
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: MP4 文件
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+
+  /api/stream/set-poster-frame:
+    post:
+      tags: [Video]
+      summary: 设置 Stream 封面帧
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uid]
+              properties:
+                uid: { type: string }
+                pct:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                  default: 0.5
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/internal-video/init-upload:
+    post:
+      tags: [Video]
+      summary: 内部生成视频上传初始化
+      description: 为内部生成流程创建 Stream tus/direct upload 凭证。
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/VideoInitUpload'
+      responses:
+        '200':
+          $ref: '#/components/responses/UploadTicket'
+
+  /api/user-videos/init-upload:
+    post:
+      tags: [User Uploads]
+      summary: 用户投稿视频初始化上传
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/VideoInitUpload'
+      responses:
+        '200':
+          $ref: '#/components/responses/UploadTicket'
+
+  /api/user-videos/finalize:
+    post:
+      tags: [User Uploads]
+      summary: 用户投稿上传完成并进入审核
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recordId]
+              properties:
+                recordId: { type: string, format: uuid }
+                fileSize: { type: integer }
+                durationSeconds: { type: number }
+                originalFilename: { type: string }
+                streamUid: { type: string }
+      responses:
+        '200':
+          description: finalize 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  record:
+                    type: object
+                    additionalProperties: true
+
+  /api/admin/user-videos/list:
+    get:
+      tags: [User Uploads]
+      summary: 后台获取用户视频审核列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [uploading, pending_review, approved, rejected]
+      responses:
+        '200':
+          description: 审核队列
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  videos:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/admin/user-videos/review:
+    post:
+      tags: [User Uploads]
+      summary: 审核用户视频
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, action]
+              properties:
+                id: { type: string, format: uuid }
+                action:
+                  type: string
+                  enum: [approve, reject]
+                reason: { type: string }
+                title: { type: string }
+                description: { type: string }
+                tags:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/series/save:
+    post:
+      tags: [Series Paywall]
+      summary: 保存短剧草稿
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeriesSaveRequest'
+      responses:
+        '200':
+          description: 保存成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  id: { type: string, format: uuid }
+                  status: { type: string }
+
+  /api/series/publish:
+    post:
+      tags: [Series Paywall]
+      summary: 发布短剧
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seriesId]
+              properties:
+                seriesId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  series:
+                    type: object
+                    additionalProperties: true
+
+  /api/series/archive:
+    post:
+      tags: [Series Paywall]
+      summary: 归档短剧
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seriesId]
+              properties:
+                seriesId: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/series/{seriesId}/checkout-bundle:
+    post:
+      tags: [Series Paywall]
+      summary: 创建整剧买断 Stripe Checkout
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: seriesId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Checkout 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+        '409':
+          description: 已购买
+
+  /api/episodes/{episodeId}/unlock:
+    post:
+      tags: [Series Paywall]
+      summary: 解锁付费单集
+      description: 根据会员/买断/余额判断,最终通过 RPC 原子扣 Token 并插入 unlock。
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: episodeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 解锁成功或已解锁
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  unlock_id: { type: string, format: uuid, nullable: true }
+                  balance_after: { type: integer, nullable: true }
+                  already_unlocked: { type: boolean }
+                  via_bundle: { type: boolean }
+                  via_member: { type: boolean }
+                  insufficient: { type: boolean }
+                  required: { type: integer }
+                  current: { type: integer }
+
+  /api/episodes/{episodeId}/access:
+    get:
+      tags: [Series Paywall]
+      summary: 判断用户是否可观看单集
+      description: 支持匿名访问。返回免费、已解锁、会员免费、整剧买断等访问原因。
+      security:
+        - bearerAuth: []
+        - {}
+      parameters:
+        - name: episodeId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 访问状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  canWatch: { type: boolean }
+                  reason:
+                    type: string
+                    example: free
+                  price: { type: integer }
+                  episode:
+                    type: object
+                    additionalProperties: true
+                  series:
+                    type: object
+                    additionalProperties: true
+
+  /api/content-reports/submit:
+    post:
+      tags: [Series Paywall]
+      summary: 提交内容举报
+      description: 可匿名提交,登录时会记录用户 ID。
+      security:
+        - bearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contentId, reason]
+              properties:
+                contentId: { type: string }
+                contentType: { type: string, example: video }
+                reason: { type: string }
+                detail: { type: string }
+                contactEmail: { type: string, format: email }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/wallet/balance:
+    get:
+      tags: [Wallet]
+      summary: 获取当前用户 Token 钱包余额与流水
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 钱包余额
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletBalanceResponse'
+
+  /api/wallet/checkout:
+    post:
+      tags: [Wallet]
+      summary: 创建 Token 充值 Checkout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [package_id]
+              properties:
+                package_id:
+                  type: string
+                  example: pkg_499
+      responses:
+        '200':
+          description: Checkout 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+
+  /api/credits/claim-daily:
+    post:
+      tags: [Wallet]
+      summary: 领取每日登录奖励
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 领取结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyClaimResponse'
+
+  /api/tokens/claim-daily:
+    post:
+      tags: [Wallet]
+      summary: 领取每日登录奖励 canonical token 路径
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 领取结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyClaimResponse'
+
+  /api/credits/claim-share:
+    post:
+      tags: [Wallet]
+      summary: 分享奖励
+      description: 每次 +10 Token,每天最多 3 次。
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 领取结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  newCredits: { type: integer }
+                  tokens: { type: integer }
+                  newCount: { type: integer }
+                  reason: { type: string, example: daily_limit_reached }
+
+  /api/stripe/checkout:
+    post:
+      tags: [Stripe]
+      summary: 创建订阅/套餐 Stripe Checkout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tier:
+                  type: string
+                  enum: [lite, starter, creator, studio]
+                billing:
+                  type: string
+                  enum: [monthly, yearly]
+                liteTier:
+                  type: string
+                  description: Lite 动态价阶
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+
+  /api/stripe/customer-portal:
+    post:
+      tags: [Stripe]
+      summary: 创建 Stripe Customer Portal 地址
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  url: { type: string, format: uri }
+
+  /api/stripe/webhook:
+    post:
+      tags: [Stripe]
+      summary: Stripe Webhook
+      description: 处理 invoice.payment_succeeded、checkout.session.completed、charge.refunded 等事件。
+      security:
+        - stripeSignature: []
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook accepted
+        '400':
+          description: 签名或 payload 错误
+        '500':
+          description: 处理失败,Stripe 会重试
+
+  /api/lite/next-price:
+    get:
+      tags: [Stripe]
+      summary: 获取 Lite 下一次购买价格
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lite 当前价格阶梯
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  tier: { type: string }
+                  priceUsd: { type: number }
+                  priceCents: { type: integer }
+                  completedCount: { type: integer }
+
+  /api/admin/users/list:
+    get:
+      tags: [Admin Users]
+      summary: 后台用户列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: 用户列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUser'
+                  page: { type: integer }
+                  perPage: { type: integer }
+                  total: { type: integer }
+
+  /api/admin/users/update-role:
+    post:
+      tags: [Admin Users]
+      summary: 修改用户角色
+      description: 仅 super admin 可修改角色。role=user 会移除 admin/super_admin。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, role]
+              properties:
+                userId: { type: string, format: uuid }
+                role:
+                  type: string
+                  enum: [super_admin, admin, user]
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/users/ban:
+    post:
+      tags: [Admin Users]
+      summary: 封禁/解封用户
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, banned]
+              properties:
+                userId: { type: string, format: uuid }
+                banned: { type: boolean }
+                reason: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/grant-credits:
+    post:
+      tags: [Admin Users]
+      summary: 后台给用户加 Token legacy credits 路径
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/AdminGrantTokens'
+      responses:
+        '200':
+          $ref: '#/components/responses/AdminGrantTokens'
+
+  /api/admin/grant-tokens:
+    post:
+      tags: [Admin Users]
+      summary: 后台给用户加 Token
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/AdminGrantTokens'
+      responses:
+        '200':
+          $ref: '#/components/responses/AdminGrantTokens'
+
+  /api/admin/orders/list:
+    get:
+      tags: [Admin Orders]
+      summary: 后台订单列表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: voided
+          in: query
+          schema: { type: string, enum: [true, false] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: perPage
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: 订单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  orders:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  total: { type: integer }
+                  page: { type: integer }
+                  perPage: { type: integer }
+
+  /api/admin/orders/details:
+    get:
+      tags: [Admin Orders]
+      summary: 订单详情,包含 Stripe 深度信息
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderNo
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 订单详情
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  order:
+                    type: object
+                    additionalProperties: true
+                  stripe:
+                    type: object
+                    additionalProperties: true
+
+  /api/admin/orders/refund-context:
+    get:
+      tags: [Admin Orders]
+      summary: 退款前风控上下文
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderNo
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 风控上下文
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  context:
+                    $ref: '#/components/schemas/RefundContext'
+
+  /api/admin/orders/refund:
+    post:
+      tags: [Admin Orders]
+      summary: 后台发起 Stripe 退款
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderNo, reason]
+              properties:
+                orderNo: { type: string, example: in_123 }
+                amount:
+                  type: number
+                  description: USD 金额,为空表示全额退款
+                reason: { type: string }
+                stripeReason:
+                  type: string
+                  enum: [duplicate, fraudulent, requested_by_customer]
+                deductCredits:
+                  type: integer
+                  description: 退款时扣回的 Token 数
+      responses:
+        '200':
+          description: 退款成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  orderNo: { type: string }
+                  refundId: { type: string }
+                  refundedAmount: { type: number }
+                  creditsDeducted: { type: integer }
+                  stripeObjectType: { type: string }
+
+  /api/admin/orders/void:
+    post:
+      tags: [Admin Orders]
+      summary: 作废手工/异常订单
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderNo, reason]
+              properties:
+                orderNo: { type: string }
+                reason: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/drama/refund:
+    post:
+      tags: [Admin Orders]
+      summary: 短剧订单退款
+      description: 支持 ucoins_orders 和 series_purchases,会调用 Stripe refund 并做钱包/解锁反向处理。
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source_table, source_id, reason]
+              properties:
+                source_table:
+                  type: string
+                  enum: [ucoins_orders, series_purchases]
+                source_id: { type: string, format: uuid }
+                reason: { type: string }
+      responses:
+        '200':
+          description: 退款成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  refund_id: { type: string }
+                  refunded_amount_cents: { type: integer }
+                  reversal:
+                    type: object
+                    additionalProperties: true
+
+  /api/admin/stripe/reconcile:
+    get:
+      tags: [Admin Orders]
+      summary: Stripe 对账,列出 Stripe 成功但 DB 缺失的订单
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+            minimum: 1
+            maximum: 180
+      responses:
+        '200':
+          description: 对账结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  days: { type: integer }
+                  summary:
+                    type: object
+                    additionalProperties: true
+                  missingOneTime:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  missingInvoices:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/admin/stripe/reconcile/import:
+    post:
+      tags: [Admin Orders]
+      summary: 导入一条缺失 Stripe 订单
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: string
+                  description: cs_xxx 或 in_xxx
+      responses:
+        '200':
+          description: 导入结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  orderNo: { type: string }
+                  alreadyExisted: { type: boolean }
+                  userId: { type: string }
+                  resolveVia: { type: string }
+                  tier: { type: string }
+                  creditsGranted: { type: integer }
+                  newBalance: { type: integer }
+
+  /api/admin/settlements:
+    get:
+      tags: [Admin Orders]
+      summary: 查询创作者结算单
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema:
+            type: string
+            example: 2026-05
+      responses:
+        '200':
+          description: 结算单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  settlements:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /api/admin/settlements/generate:
+    post:
+      tags: [Admin Orders]
+      summary: 生成指定周期结算单
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period]
+              properties:
+                period:
+                  type: string
+                  example: 2026-05
+      responses:
+        '200':
+          description: 生成结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  period: { type: string }
+                  created: { type: integer }
+                  updated: { type: integer }
+
+  /api/admin/settlements/{id}:
+    patch:
+      tags: [Admin Orders]
+      summary: 更新结算单状态/付款信息
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string }
+                paid_reference: { type: string }
+                notes: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/creator/settlements/{id}/confirm:
+    post:
+      tags: [Admin Orders]
+      summary: 创作者确认结算单
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/acquisition-costs:
+    get:
+      tags: [Admin Orders]
+      summary: 查询短剧投放/获客成本
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          required: true
+          schema: { type: string, example: 2026-05 }
+        - name: series_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 成本列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  costs:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+    post:
+      tags: [Admin Orders]
+      summary: 新增短剧投放/获客成本
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [series_id, period, channel, amount_usd_cents]
+              properties:
+                series_id: { type: string, format: uuid }
+                period: { type: string, example: 2026-05 }
+                channel: { type: string }
+                amount_usd_cents: { type: integer }
+                notes: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/acquisition-costs/{id}:
+    patch:
+      tags: [Admin Orders]
+      summary: 更新获客成本
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount_usd_cents: { type: integer }
+                notes: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+    delete:
+      tags: [Admin Orders]
+      summary: 删除获客成本
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/content-reports/resolve:
+    post:
+      tags: [Admin Content]
+      summary: 处理内容举报
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reportId, status]
+              properties:
+                reportId: { type: string, format: uuid }
+                status:
+                  type: string
+                  enum: [resolved, dismissed]
+                resolutionNote: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/help/articles:
+    get:
+      tags: [Admin Content]
+      summary: 公开帮助文章列表
+      security: []
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: 帮助文章列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  articles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HelpArticle'
+
+  /api/admin/help/articles:
+    get:
+      tags: [Admin Content]
+      summary: 后台帮助文章列表
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 全量帮助文章
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  articles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HelpArticle'
+    post:
+      tags: [Admin Content]
+      summary: 新建帮助文章
+      security:
+        - bearerAuth: []
+      requestBody:
+        $ref: '#/components/requestBodies/HelpArticleWrite'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/help/articles/{id}:
+    patch:
+      tags: [Admin Content]
+      summary: 更新帮助文章
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        $ref: '#/components/requestBodies/HelpArticleWrite'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+    delete:
+      tags: [Admin Content]
+      summary: 删除帮助文章
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/dev-log:
+    get:
+      tags: [Admin Content]
+      summary: 后台开发日志列表
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 开发日志
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+    post:
+      tags: [Admin Content]
+      summary: 新建开发日志
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                body: { type: string }
+                tags:
+                  type: array
+                  items: { type: string }
+                status: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/dev-log/{id}:
+    patch:
+      tags: [Admin Content]
+      summary: 更新开发日志
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      requestBody:
+        $ref: '#/components/requestBodies/AnyJson'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+    delete:
+      tags: [Admin Content]
+      summary: 删除开发日志
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UuidId'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/team-chat/messages:
+    get:
+      tags: [Admin Content]
+      summary: TeamChat 消息列表/增量
+      security:
+        - bearerAuth: []
+        - adminApiToken: []
+      parameters:
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 200 }
+      responses:
+        '200':
+          description: 消息列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamChatMessagesResponse'
+
+  /api/admin/team-chat/filter:
+    get:
+      tags: [Admin Content]
+      summary: TeamChat 条件筛选
+      security:
+        - bearerAuth: []
+        - adminApiToken: []
+      parameters:
+        - name: author
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, in_progress, done, wont_do]
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: 消息列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamChatMessagesResponse'
+
+  /api/admin/team-chat/send:
+    post:
+      tags: [Admin Content]
+      summary: 发送 TeamChat 消息
+      security:
+        - bearerAuth: []
+        - adminApiToken: []
+      parameters:
+        - name: X-Admin-Post-As
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: [fei, leon, Codex]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string }
+                thread: { type: string }
+      responses:
+        '200':
+          description: 发送结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message:
+                    type: object
+                    additionalProperties: true
+                  claude:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+
+  /api/admin/team-chat/set-status:
+    post:
+      tags: [Admin Content]
+      summary: 设置 TeamChat 消息状态
+      security:
+        - bearerAuth: []
+        - adminApiToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message_id, status]
+              properties:
+                message_id: { type: string, format: uuid }
+                status:
+                  type: string
+                  enum: [open, in_progress, done, wont_do]
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/team-chat/mark-read:
+    post:
+      tags: [Admin Content]
+      summary: 标记 TeamChat 消息已读
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/email/test:
+    post:
+      tags: [Admin System]
+      summary: 测试邮件发送
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string, format: email }
+                subject: { type: string }
+                body: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+
+  /api/admin/openai/test:
+    post:
+      tags: [Admin System]
+      summary: 测试 OpenAI 图片配置
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt: { type: string }
+      responses:
+        '200':
+          description: 测试结果
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/byteplus/test:
+    post:
+      tags: [Admin System]
+      summary: 测试 BytePlus AK/SK 与 Asset Library
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                imageUrl: { type: string, format: uri }
+      responses:
+        '200':
+          description: 测试结果
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/migrate-videos-to-stream:
+    post:
+      tags: [Admin System]
+      summary: 批量迁移旧视频到 Cloudflare Stream
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun: { type: boolean, default: true }
+                limit: { type: integer, default: 2 }
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: 迁移结果
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/check-stream-status:
+    post:
+      tags: [Admin System]
+      summary: 检查 Stream URL 实际状态
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                urls:
+                  type: array
+                  items: { type: string, format: uri }
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: 检查结果
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /api/admin/system-settings:
+    get:
+      tags: [Admin System]
+      summary: 获取系统设置
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 设置列表,secret 值会被掩码
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  settings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SystemSetting'
+
+  /api/admin/system-settings/update:
+    post:
+      tags: [Admin System]
+      summary: 更新系统设置
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value]
+              properties:
+                key:
+                  type: string
+                  description: 必须在 Worker VALIDATORS allow-list 中
+                value:
+                  type: string
+                  description: 所有设置最终按 text 存储;JSON 设置传 JSON 字符串
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  key: { type: string }
+                  value: { type: string }
+                  is_secret: { type: boolean }
+                  updated_at: { type: string, format: date-time }
+
+  /ffmpeg/ffmpeg-core.wasm:
+    get:
+      tags: [Public]
+      summary: 获取 ffmpeg-core.wasm
+      description: 优先从 R2 返回,缺失时从 unpkg 代理并缓存。
+      security: []
+      responses:
+        '200':
+          description: WebAssembly 文件
+          content:
+            application/wasm:
+              schema:
+                type: string
+                format: binary
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Supabase JWT
+    adminApiToken:
+      type: apiKey
+      in: header
+      name: X-Admin-API-Token
+    stripeSignature:
+      type: apiKey
+      in: header
+      name: Stripe-Signature
+
+  parameters:
+    ProxyPath:
+      name: proxyPath
+      in: path
+      required: true
+      schema:
+        type: string
+      description: 代理路径,支持多级路径。Apifox 中可填如 agent/sts/oss/token。
+    UuidId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AuthorizationOptional:
+      name: Authorization
+      in: header
+      required: false
+      schema:
+        type: string
+
+  requestBodies:
+    AnyJson:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    VideoInitUpload:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title: { type: string }
+              filename: { type: string }
+              fileSize: { type: integer }
+              contentType: { type: string }
+              durationSeconds: { type: number }
+              source: { type: string }
+    AdminGrantTokens:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              userEmail: { type: string, format: email }
+              userId: { type: string, format: uuid }
+              credits:
+                type: integer
+                description: legacy 字段,与 tokens 二选一
+              tokens:
+                type: integer
+                description: canonical 字段,与 credits 二选一
+              tier:
+                type: string
+                enum: [free, starter, creator, studio]
+              reason: { type: string }
+              stripeInvoiceId: { type: string }
+    HelpArticleWrite:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              category: { type: string }
+              title: { type: string }
+              body: { type: string }
+              sort_order: { type: integer }
+              published: { type: boolean }
+
+  responses:
+    Success:
+      description: 成功
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean, example: true }
+    Error:
+      description: 错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ProxyResponse:
+      description: 上游透传响应
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+        text/plain:
+          schema:
+            type: string
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    UploadTicket:
+      description: 上传凭证
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean }
+              uploadURL: { type: string, format: uri }
+              uid: { type: string }
+              recordId: { type: string, format: uuid }
+              tusEndpoint: { type: string, format: uri }
+    AdminGrantTokens:
+      description: 加 Token 成功
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success: { type: boolean }
+              userId: { type: string, format: uuid }
+              email: { type: string, format: email }
+              newBalance: { type: integer }
+              credits: { type: integer }
+              tokens: { type: integer }
+              tier: { type: string }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        errMessage:
+          type: string
+        error:
+          type: string
+        reason:
+          type: string
+
+    UploadResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        publicUrl: { type: string, format: uri }
+        objectKey: { type: string }
+        errMessage: { type: string }
+
+    CheckoutResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        session_url: { type: string, format: uri }
+        url: { type: string, format: uri }
+        order_id: { type: string, format: uuid }
+
+    GenerateStoryboardRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          description: 生成提示词
+        sourceImageUrl:
+          type: string
+          format: uri
+        style:
+          type: string
+        script:
+          type: object
+          additionalProperties: true
+        protagonist:
+          type: object
+          additionalProperties: true
+        quality:
+          type: string
+          enum: [low, medium, high, auto]
+        size:
+          type: string
+          example: 1792x1024
+        renderSessionId:
+          type: string
+
+    ImageGenerationResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        imageUrl:
+          type: string
+          format: uri
+        publicUrl:
+          type: string
+          format: uri
+        model:
+          type: string
+        quality:
+          type: string
+        size:
+          type: string
+        creditsCharged:
+          type: integer
+        tokensCharged:
+          type: integer
+        errMessage:
+          type: string
+
+    VideoSubmitRequest:
+      type: object
+      required: [prompt]
+      properties:
+        prompt: { type: string }
+        imageUrl: { type: string, format: uri }
+        imageUrls:
+          type: array
+          items: { type: string, format: uri }
+        videoUrl: { type: string, format: uri }
+        videoUrls:
+          type: array
+          items: { type: string, format: uri }
+        duration:
+          type: integer
+          enum: [5, 10]
+          default: 5
+        ratio:
+          type: string
+          example: 16:9
+        resolution:
+          type: string
+          enum: [480p, 720p, 1080p]
+        generateAudio:
+          type: boolean
+          default: true
+        model:
+          type: string
+          description: BytePlus endpoint id
+        watermark:
+          type: boolean
+        renderSessionId:
+          type: string
+
+    SeriesSaveRequest:
+      type: object
+      required: [title]
+      properties:
+        seriesId:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        castIds:
+          type: array
+          items: { type: string, format: uuid }
+        episodes:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        status:
+          type: string
+          enum: [draft, published, archived]
+
+    WalletBalanceResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        ucoins:
+          type: integer
+          description: 当前 Token 余额,历史字段名沿用 ucoins
+        lifetime_purchased:
+          type: integer
+        lifetime_spent:
+          type: integer
+        recent_tx:
+          type: array
+          items:
+            type: object
+            properties:
+              amount: { type: integer }
+              balance_after: { type: integer }
+              tx_type: { type: string }
+              description: { type: string }
+              created_at: { type: string, format: date-time }
+
+    DailyClaimResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        claimed: { type: boolean }
+        credits: { type: integer }
+        tokens: { type: integer }
+        last_claim_date: { type: string, format: date }
+        added: { type: integer }
+        message: { type: string }
+
+    AdminUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string, nullable: true }
+        avatar_url: { type: string, nullable: true }
+        tier: { type: string }
+        credits: { type: integer }
+        tokens: { type: integer }
+        is_admin: { type: boolean }
+        is_super_admin: { type: boolean }
+        banned: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    RefundContext:
+      type: object
+      properties:
+        orderNo: { type: string }
+        orderAmount: { type: number }
+        orderCreatedAt: { type: string, format: date-time }
+        tier: { type: string, nullable: true }
+        grantedTokens: { type: integer }
+        usageTokens: { type: integer }
+        usagePct: { type: number }
+        generationCount: { type: integer }
+        currentBalance: { type: integer }
+        priorRefunds: { type: integer }
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        riskReasons:
+          type: array
+          items: { type: string }
+        suggestedRefundUsd: { type: number }
+        suggestedRefundReason: { type: string }
+        userEmail: { type: string, format: email, nullable: true }
+
+    HelpArticle:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        category: { type: string }
+        title: { type: string }
+        body: { type: string }
+        sort_order: { type: integer }
+        published: { type: boolean }
+        updated_at: { type: string, format: date-time }
+
+    TeamChatMessagesResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        count: { type: integer }
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              author_display_name: { type: string }
+              author_kind: { type: string }
+              body: { type: string }
+              status: { type: string }
+              thread: { type: string }
+              created_at: { type: string, format: date-time }
+
+    SystemSetting:
+      type: object
+      properties:
+        key: { type: string }
+        value:
+          type: string
+          nullable: true
+          description: secret 会被掩码为末尾 4 位
+        description: { type: string, nullable: true }
+        is_secret: { type: boolean }
+        configured: { type: boolean }
+        updated_at: { type: string, format: date-time, nullable: true }
+        updated_by: { type: string, format: uuid, nullable: true }
+        updated_by_user:
+          type: object
+          nullable: true
+          additionalProperties: true
