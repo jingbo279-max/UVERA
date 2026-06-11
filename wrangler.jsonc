@@ -1,0 +1,54 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// 🚨 DEPLOY THIS WITH `npm run deploy` (which calls `wrangler deploy`)
+//
+//    ✅ Correct:  npm run deploy           → Worker + assets → uvera.ai
+//    ⛔ WRONG:    wrangler pages deploy …  → goes to CF Pages, NOT uvera.ai
+//
+// This project is Cloudflare Workers + Static Assets (NOT Cloudflare Pages).
+// The "routes" entry below pins uvera.ai to the Worker. `wrangler pages
+// deploy` ignores this file entirely and pushes to a separate uvera.pages.dev
+// project — so deploys "succeed" but uvera.ai stays on the old version.
+//
+// 2026-05-26 fei incident: 8+ consecutive `wrangler pages deploy` runs all
+// reported "Deployment complete!" while uvera.ai served stale code for 5
+// hours. Only `wrangler deploy` (with this jsonc) updates the live site.
+//
+// See CLAUDE.md → "🚨 部署" for the full deploy protocol.
+// ═══════════════════════════════════════════════════════════════════════════
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "uvera",
+  // longvv.dev@gmail.com's account — pinned here so deploys (local + CI)
+  // always target the right account without depending on env vars / secrets.
+  // Account ID is not sensitive (visible in any dashboard URL).
+  "account_id": "d2acf946d8f80f382be77437a71c4832",
+  "main": "./public/_worker.js",
+  "compatibility_date": "2026-04-19",
+  "observability": {
+    "enabled": true
+  },
+  // Custom domain — preserves uvera.ai routing across deploys.
+  // Without this entry, `wrangler deploy` warns it would wipe the
+  // remote-only route config. Locked in 2026-05-05 after initial GA push.
+  "routes": [
+    {
+      "pattern": "uvera.ai",
+      "zone_name": "uvera.ai",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "uvrera"
+    }
+  ]
+}

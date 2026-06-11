@@ -1,0 +1,57 @@
+name: Build check
+
+# Verifies every push / PR to main builds cleanly. Does NOT deploy —
+# auto-deploy via wrangler is parked until post-launch (see
+# changes.md 2026-05-05 for the trail of attempts and the residual
+# 10000 / 9106 error we couldn't crack within the 5/8 window).
+#
+# Production deploys are triggered locally via `npm run deploy`.
+# Requires `wrangler login` (OAuth) on the operator's machine.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # VITE_ADMIN_EMAILS not strictly needed for a build-only check,
+      # but pass it through so the produced bundle is identical to a
+      # would-be production deploy — catches inline-env-related issues
+      # at build time.
+      - name: Build
+        env:
+          VITE_ADMIN_EMAILS: ${{ secrets.VITE_ADMIN_EMAILS }}
+        run: npm run build
+
+      - name: Verify _worker.js is syntactically valid
+        run: node --check public/_worker.js
+
+      # §2026-05-31 — docs 系统门禁(P1):校验每篇 .md 的 frontmatter schema
+      # (title/type/status/owner/created/updated)+ 所有相对链接零 broken。
+      # 标准见 docs/CONVENTIONS.md。维护纪律见 memory discipline-update-references-on-change。
+      - name: Docs lint (frontmatter + zero broken links)
+        run: npm run docs:lint

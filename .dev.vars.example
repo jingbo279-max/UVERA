@@ -1,0 +1,30 @@
+# Local-only secrets for scripts that need direct DB / Stripe access.
+# Copy this file to `.dev.vars` (gitignored) and fill in real values.
+#
+# NEVER commit `.dev.vars` itself — only this `.dev.vars.example`.
+
+SUPABASE_URL=https://wjhdsodlxekvhpahascs.supabase.co
+
+# §2026-05-31 — PRIMARY auth path for scripts/team-chat*.mjs.
+# Lets local scripts read/write TeamChat via the Worker admin endpoints
+# WITHOUT exposing the Supabase service_role key locally (Worker keeps
+# service_role in CF env; this token is a separate, rotatable admin proxy).
+#
+# Setup ONCE:
+#   1. openssl rand -hex 32                          # generate (copy output)
+#   2. wrangler secret put CLAUDE_ADMIN_API_TOKEN    # paste same value
+#   3. Below: CLAUDE_ADMIN_API_TOKEN=<same value>    # paste again here
+#
+# After this, scripts/team-chat*.mjs all work via Worker — no service_role.
+#
+# Worker endpoints unlocked by this token:
+#   GET  /api/admin/team-chat/filter?author=&status=&limit=    (read)
+#   POST /api/admin/team-chat/send  + X-Admin-Post-As: fei|leon|claude  (write)
+#   POST /api/admin/team-chat/set-status                       (status flip)
+CLAUDE_ADMIN_API_TOKEN=
+
+# (deprecated — not needed by current scripts; kept here only as reference
+# for legacy migrations that might run psql directly via Supabase REST API.
+# If you need direct DB access, Supabase Dashboard → Project Settings →
+# API → service_role secret.)
+# SUPABASE_SERVICE_ROLE_KEY=

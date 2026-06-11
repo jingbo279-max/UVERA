@@ -1,0 +1,244 @@
+NeoAI
+一张照片 · 一句话 · 一段视频
+核心功能流程方案
+角色 · 剧本 · 风格 · 角色图 · 视频
+Version 1.0  ·  2026.04
+
+1. 功能概述
+NeoAI 的核心能力由 5 个串联的功能模块组成，从用户照片输入开始，依次完成角色建模、剧本生成、风格化设定、角色图渲染、最终视频合成。本方案仅描述每个功能的输入、处理逻辑、输出与异常分支，不涉及前端 UI 实现。
+1.1 功能链路
+	•	创建角色：将用户照片提取为可复用的角色身份。
+	•	生成剧本：基于角色身份与创意文本生成结构化分镜脚本。
+	•	选择风格：从风格库中确定整片视觉语言。
+	•	生成角色图：渲染符合所选风格的 AI 角色设定图，并按需进行真人合规审核。
+	•	生成视频：将角色图、风格、剧本提示词输入视频引擎，渲染最终成片。
+1.2 数据流
+用户照片 → 角色记录 → 剧本（含分镜与提示词）→ 角色图（OSS URL）→ 视频任务（request_id）→ 视频成片（OSS URL）。每个环节的产出都会写入数据库并保留 request_id 与所属用户，用于追溯、计费与分享。
+
+2. 功能一：创建角色
+2.1 目标
+将用户的真实照片转化为可复用的"角色身份"，作为后续所有创作的视觉锚点。每个用户最多可保存 3 个角色。
+2.2 输入
+	•	用户照片：摄像头采集或本地上传，base64 或二进制流。
+	•	用户身份：accessToken（用于 OSS STS 凭证换取与归属判断）。
+2.3 处理逻辑
+	•	校验照片是否包含可识别的人脸（最低分辨率、人脸占比）。
+	•	使用登录态 accessToken 调用 STS 接口换取阿里云 OSS（上海节点）临时凭证。
+	•	将照片直传 OSS，启用双签名重试（STS 优先，AK/SK 兜底），失败重试最多 2 次。
+	•	调用 Vision 模型分析照片，提取性别、年龄、核心视觉特征（发型、肤色、五官比例等）。
+	•	将 OSS URL 与视觉特征写入 user_characters 表，绑定 user_id。
+	•	若用户已有 3 个角色，提示先删除旧角色再创建。
+2.4 输出
+字段
+说明
+characterId
+角色唯一标识
+photoUrl
+OSS 存储的角色照片 URL
+identityFeatures
+视觉特征结构体（性别、年龄、外观描述）
+userId
+归属用户
+2.5 异常处理
+	•	未识别到人脸 → 返回错误码 NO_FACE_DETECTED，要求重新拍摄。
+	•	OSS 上传两次重试均失败 → 返回 UPLOAD_FAILED，保留本地照片用于二次提交。
+	•	角色数量已达上限 → 返回 CHARACTER_LIMIT_REACHED。
+2.6 约束
+	•	真实照片仅作为"身份特征来源"，严禁直接传入后续视频生成接口。
+	•	所有照片必须落盘到国内 OSS 节点，禁止使用海外节点。
+
+3. 功能二：生成剧本
+3.1 目标
+基于角色身份特征与用户的一句话创意，生成 8~15 秒的结构化分镜脚本，包含镜头详情、配乐建议与最终视频提示词。
+3.2 输入
+字段
+说明
+characterId
+已创建的角色 ID
+transcript
+用户一句话创意文本（语音转写或手动输入）
+videoType
+视频类型：trailer / vlog / mv / tvc / promo / short-drama
+previousStory
+（可选）接龙创作时上一段剧情摘要
+3.3 处理逻辑
+	•	从 user_characters 读取 identityFeatures，作为强约束注入 Prompt，确保角色形象一致。
+	•	按 videoType 加载对应的叙事框架模板（如预告片重悬念、Vlog 重第一人称、MV 重节奏）。
+	•	调用 AI 编剧模型，要求输出严格 JSON 结构（segments、shots、music、videoPrompt、mood、summary、totalDuration）。
+	•	解析 totalDuration，限制在 5~30 秒之间，无结果回退至 10 秒。
+	•	对每个 shot 生成独立的 videoPrompt（含运镜、动作、光线、台词），用于后续视频引擎调用。
+	•	将完整剧本结果与 transcript、videoType 一并写入 works 表的 script_segments / script_summary 等字段。
+3.4 输出
+字段
+说明
+segments
+脚本片段数组（tag + text）
+shots
+分镜详情数组（shotNumber、duration、camera、action、lighting、sound、dialogue、videoPrompt）
+music
+配乐建议（style、mood、reference）
+videoPrompt
+整片合成提示词
+summary
+1~2 句剧情摘要（用于分享与归档）
+totalDuration
+解析后的整片时长（5~30s）
+3.5 异常处理
+	•	AI 模型返回非 JSON 或字段缺失 → 自动重试 1 次，仍失败则返回 SCREENWRITER_FAILED，保留用户输入。
+	•	totalDuration 超出 5~30s → 自动夹紧到边界值。
+	•	characterId 不存在或不属于当前用户 → 返回 INVALID_CHARACTER。
+
+4. 功能三：选择风格
+4.1 目标
+从 52 种内置艺术风格中确定整片视觉语言，决定后续角色图与视频的渲染方向，并驱动是否需要触发真人合规审核。
+4.2 输入
+	•	styleId：风格唯一标识（如 cinematic-photorealistic、wes-anderson、papercut-chinese）。
+	•	workId：当前作品 ID（关联到 works 表）。
+4.3 风格分类
+类别
+代表风格
+写实/电影感
+cinematic-photorealistic、gritty-realism、souls-dark-fantasy、wes-anderson、illumination 等（共 9 种触发真人审核）
+动画/插画
+belleville、scanner-darkly、painterly-npr、vhs-horror
+中国传统工艺
+工笔、青花瓷、刺绣、年画、剪纸、木雕
+数字艺术
+彩粘土、玻璃吹制、PS1 低模、Y2K 果冻色、HD-2D 像素
+游戏美术
+黑魂暗黑奇幻、赛璐珞、像素 3D 等
+4.4 处理逻辑
+	•	校验 styleId 是否属于内置 52 种风格。
+	•	查询风格元数据（提示词模板、是否需要真人审核、推荐生成引擎）。
+	•	将 styleId 与 styleName 写入 works 表的 style / style_name 字段。
+	•	若风格属于 9 种写实风格集合，置一个 needsRealPersonReview = true 的标记，供"生成角色图"环节使用。
+4.5 输出
+	•	styleId / styleName：写入 works 表，作为后续渲染参数。
+	•	needsRealPersonReview：布尔值，决定生成角色图后是否触发审核。
+	•	stylePromptTemplate：风格化提示词模板，注入到下一步的角色图生成 Prompt。
+4.6 异常处理
+	•	styleId 非法 → 返回 INVALID_STYLE。
+	•	风格元数据缺失 → 回退到默认 cinematic 模板并记录告警。
+
+5. 功能四：生成角色图
+5.1 目标
+在所选风格下，基于角色身份特征与剧情摘要生成 AI 角色设定图，并在写实风格下完成真人合规审核。该图是视频生成接口允许使用的唯一角色视觉来源。
+5.2 输入
+字段
+说明
+characterId
+角色 ID（提供 photoUrl + identityFeatures）
+styleId
+选中的风格 ID
+summary
+剧本生成的剧情摘要
+engine
+生成引擎：neo（默认）/ lovable（Gemini 3 Flash Image）
+5.3 处理逻辑
+	•	合并角色身份特征 + 风格模板 + 剧情摘要，构造角色图生成 Prompt。
+	•	根据后台 app_settings 选择生成引擎，调用对应模型生成角色图。
+	•	生成结果直传国内 OSS，得到 characterImageUrl。
+	•	写入 works 表的 concept_image_url 字段。
+	•	若 needsRealPersonReview = true，调用 /agent/ark-asset-review/submit 接口提交审核（同步等待，最长 ~50s，前端给 60s 超时）。
+	•	解析审核返回的 reviewStatus：2 通过 / 3 失败 / 0~1 进行中。
+	•	审核失败时阻止后续视频生成，要求重新生成角色图。
+5.4 输出
+字段
+说明
+characterImageUrl
+AI 角色设定图的 OSS URL
+reviewStatus
+审核状态（仅写实风格）：0 待审核 / 1 审核中 / 2 通过 / 3 失败
+reviewMessage
+审核结果描述
+arkAssetId
+Ark 平台资产 ID（可用于复审追溯）
+5.5 异常处理
+	•	生成失败 → 返回 GENERATE_CHARACTER_FAILED，保留 Prompt 便于重试。
+	•	审核超时（>60s）→ 返回 REVIEW_TIMEOUT，标记图为待复核状态。
+	•	审核未通过 → 返回 REVIEW_REJECTED + 描述，阻止下一步。
+	•	OSS 上传失败 → 启用双签名重试。
+5.6 约束
+	•	视频生成接口的角色视觉输入只能是本步生成的 characterImageUrl，严禁使用原始用户照片。
+	•	未通过真人审核的图片不得进入视频生成。
+
+6. 功能五：生成视频
+6.1 目标
+整合角色图、剧本提示词与风格元数据，调用视频引擎渲染最终成片，并落库归档以支持分享、追溯与计费。
+6.2 输入
+字段
+说明
+characterImageUrl
+已通过审核的角色图
+videoPrompt
+剧本生成的整片提示词
+shots
+分镜数组（每镜含 videoPrompt 与 duration）
+totalDuration
+整片时长（5~30s）
+referenceVideoUrl
+（可选）接龙创作时的上一段视频
+model
+视频模型档位：standard / fast
+6.3 处理逻辑
+	•	根据输入维度自动选择生成类型：纯文本 → T2V，图 + 文 → I2V，参考视频 → R2V，角色驱动 → U2V。
+	•	动态计费校验：按音频 + 视频时长计算积分（100 积分 = 1 元），积分不足直接返回 INSUFFICIENT_CREDITS。
+	•	在数据库 works 表创建/更新记录，强制写入 request_id、video_prompt、user_id、user_nickname、user_avatar，确保任务可追溯。
+	•	调用 Neo-Video 2.0 视频引擎提交渲染任务，返回 request_id。
+	•	后台轮询任务状态（排队 / 渲染中 / 完成 / 失败），同时通过分享二维码支持多端实时进度查看。
+	•	渲染完成后获取 OSS 视频 URL，自动叠加 NeoAI 数字水印并回写到 works.video_url。
+	•	扣减用户积分，写入 recharge / 消费流水。
+6.4 输出
+字段
+说明
+videoUrl
+成片 OSS URL（带水印）
+requestId
+视频引擎任务 ID
+duration
+实际成片时长
+creditsCost
+实际消耗积分
+workId
+作品 ID（用于 /work/:workId 分享落地页）
+6.5 异常处理
+	•	积分不足 → 返回 INSUFFICIENT_CREDITS，触发充值流程（50/100/200/500 元套餐，微信扫码支付，3s 轮询订单）。
+	•	权限错误（旧 Token 无视频权限）→ 返回 PERMISSION_DENIED，要求清理 neo_auth 后重新登录。
+	•	敏感内容错误（SensitiveContent / PrivacyInformation）→ 后台自动触发真人审核日志，提示用户调整素材。
+	•	视频引擎超时 / 失败 → 标记任务为 failed，保留 request_id 供管理后台重放。
+6.6 约束
+	•	任务必须在提交瞬间落库，禁止只在内存中保留状态，避免任务丢失。
+	•	所有视频成片必须叠加水印后再返回。
+	•	视频生成接口禁止接收原始用户真实照片或 base64 字符串。
+
+7. 端到端数据流总览
+#
+功能
+核心输入
+核心输出
+1
+创建角色
+用户照片 + accessToken
+characterId + photoUrl + identityFeatures
+2
+生成剧本
+characterId + transcript + videoType
+segments + shots + videoPrompt + summary + totalDuration
+3
+选择风格
+styleId + workId
+styleName + needsRealPersonReview + stylePromptTemplate
+4
+生成角色图
+characterId + styleId + summary
+characterImageUrl + reviewStatus
+5
+生成视频
+characterImageUrl + videoPrompt + shots + duration
+videoUrl + requestId + workId + creditsCost
+7.1 关键约束汇总
+	•	真人照片只用于身份特征提取，禁止流入视频引擎。
+	•	9 种写实风格强制触发真人审核；未通过禁止生成视频。
+	•	视频任务必须在提交瞬间落库（含 request_id），便于追溯与积分对账。
+	•	所有图片 / 视频统一存储于阿里云 OSS 上海节点，使用 STS 临时凭证。
+	•	计费按"音频 + 视频"动态计算，100 积分 = 1 元，不足时阻断生成并触发充值。

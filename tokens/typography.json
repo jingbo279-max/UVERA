@@ -1,0 +1,38 @@
+{
+  "font/family/sans": {
+    "light": "\"Inter\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"
+  },
+  "font/size/large/title": {
+    "light": "2.125rem"
+  },
+  "font/size/title1": {
+    "light": "1.75rem"
+  },
+  "font/size/title2": {
+    "light": "1.375rem"
+  },
+  "font/size/title3": {
+    "light": "1.25rem"
+  },
+  "font/size/headline": {
+    "light": "1.0625rem"
+  },
+  "font/size/body": {
+    "light": "1.0625rem"
+  },
+  "font/size/callout": {
+    "light": "1rem"
+  },
+  "font/size/subheadline": {
+    "light": "0.9375rem"
+  },
+  "font/size/footnote": {
+    "light": "0.8125rem"
+  },
+  "font/size/caption1": {
+    "light": "0.75rem"
+  },
+  "font/size/caption2": {
+    "light": "0.6875rem"
+  }
+}

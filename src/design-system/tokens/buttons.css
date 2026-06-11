@@ -1,0 +1,123 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Button Design Tokens — using semantic color tokens
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+
+  /* ── Icon Button ──────────────────────────────────────────────────────── */
+  .btn-icon-ghost {
+    @apply w-10 h-10 rounded-full
+           bg-black/10 hover:bg-black/20
+           flex items-center justify-center flex-shrink-0
+           transition-all duration-200 cursor-pointer;
+  }
+  .btn-icon-muted {
+    @apply w-9 h-9 rounded-full
+           bg-white/10 hover:bg-white/20
+           flex items-center justify-center flex-shrink-0
+           transition-all duration-300 cursor-pointer;
+  }
+
+  .dark .btn-icon-ghost {
+    @apply bg-white/10 hover:bg-white/20;
+  }
+
+  /* ── Pill Button ──────────────────────────────────────────────────────── */
+  .btn-pill {
+    @apply flex items-center gap-1.5 px-3 py-1.5
+           rounded-lg border border-background-tertiary
+           text-xs text-label-secondary
+           hover:bg-background hover:border-label-quaternary
+           transition-all cursor-pointer;
+  }
+  .dark .btn-pill {
+    @apply hover:bg-background-secondary;
+  }
+
+  /* ── Tag Button ───────────────────────────────────────────────────────── */
+  .btn-tag {
+    @apply px-2.5 py-1 rounded-full
+           text-xs font-medium
+           border border-background-tertiary text-label-secondary
+           hover:border-label-quaternary hover:text-label
+           transition-all cursor-pointer;
+  }
+  .btn-tag-active {
+    @apply px-2.5 py-1 rounded-full
+           text-xs font-medium
+           border border-accent/50 bg-accent-bg text-accent
+           transition-all cursor-pointer;
+  }
+  .dark .btn-tag-active {
+    @apply border-accent/60 bg-accent/15;
+  }
+
+  /* ── Segment Button ───────────────────────────────────────────────────── */
+  .btn-segment {
+    @apply px-5 py-1.5 rounded-lg
+           text-sm font-medium
+           text-label-tertiary hover:text-label-secondary
+           transition-all cursor-pointer;
+  }
+  .btn-segment-active {
+    @apply px-5 py-1.5 rounded-lg
+           text-sm font-medium
+           bg-white text-label shadow-sm
+           transition-all cursor-pointer;
+  }
+  .dark .btn-segment-active {
+    @apply bg-background-secondary text-raw-stone-50 shadow-none;
+  }
+
+  /* ── Choice Button ────────────────────────────────────────────────────── */
+  .btn-choice {
+    @apply flex-1 py-2 rounded-xl
+           text-sm border border-background-tertiary text-label-secondary
+           hover:bg-background
+           transition-all cursor-pointer;
+  }
+  .btn-choice-active {
+    @apply flex-1 py-2 rounded-xl
+           text-sm font-medium
+           border border-accent/50 bg-accent-bg text-accent
+           transition-all cursor-pointer;
+  }
+  .dark .btn-choice {
+    @apply hover:bg-background-secondary;
+  }
+  .dark .btn-choice-active {
+    @apply border-accent/60 bg-accent/15;
+  }
+
+  /* ── AI Action Button ─────────────────────────────────────────────────── */
+  .btn-ai {
+    @apply flex items-center gap-1 px-2.5 py-1 rounded-lg
+           text-xs text-accent
+           hover:text-accent hover:bg-accent-bg
+           transition-all cursor-pointer;
+  }
+
+  /* ── Primary Button ───────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply w-full py-3 rounded-full
+           text-sm font-semibold text-white
+           flex items-center justify-center gap-2
+           bg-gradient-to-r from-violet-600 to-purple-600
+           hover:from-violet-700 hover:to-purple-700
+           shadow-sm transition-all cursor-pointer
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  /* ── Secondary Button — iOS .bordered / capsule shape per HIG ─────────── */
+  .btn-secondary {
+    @apply py-3 px-4 rounded-full
+           text-sm font-semibold
+           flex items-center justify-center gap-2
+           border border-background-tertiary
+           text-label-secondary bg-background
+           hover:bg-background-secondary hover:text-label
+           shadow-sm transition-all cursor-pointer
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+}

@@ -1,0 +1,55 @@
+name: Deploy docs site
+
+# §2026-06-02 — docs.uvera.ai 自动部署。
+#
+# 完全独立于主站:只构建 VitePress + 部署 uvera-docs worker
+# (用 docs.wrangler.jsonc),碰不到主站 uvera worker / uvera.ai。
+# 仅在 docs 相关文件变动时触发,避免无谓构建。
+#
+# 需要 repo secret CLOUDFLARE_API_TOKEN(权限:Workers Scripts:Edit
+# + uvera.ai zone)。未配置时 deploy 步骤优雅跳过(不报错),配好后自动生效。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'docs.wrangler.jsonc'
+      - '.github/workflows/docs-deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & deploy docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build VitePress
+        run: npm run docs:build
+
+      - name: Deploy uvera-docs worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: d2acf946d8f80f382be77437a71c4832
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN 未配置 — 跳过 docs 部署。到 repo Settings → Secrets 添加后即自动生效。"
+            exit 0
+          fi
+          npx wrangler deploy --config docs.wrangler.jsonc

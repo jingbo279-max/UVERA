@@ -1,0 +1,34 @@
+{
+  "glass/regular/border": {
+    "light": "rgba(0,   0,   0,   0.40)"
+  },
+  "glass/clear/border": {
+    "light": "rgba(0,   0,   0,   0.35)"
+  },
+  "glass/dark/border": {
+    "light": "rgba(255, 255, 255, 0.55)"
+  },
+  "glass/tinted/border": {
+    "light": "rgba(124, 58,  237, 0.80)"
+  },
+  "glass/prominent/border": {
+    "light": "rgba(0,   0,   0,   0.50)"
+  },
+  "glass/morphing/border": {
+    "light": "rgba(0,   0,   0,   0.45)"
+  },
+  "glass/ctrl-on/border": {
+    "light": "rgba(0,   0,   0,   0.50)"
+  },
+  "glass/ctrl-off/border": {
+    "light": "rgba(255, 255, 255, 0.40)"
+  },
+  "glass/ctrl-icon-on/border": {
+    "light": "rgba(0,   0,   0,   0.40)",
+    "dark": "rgba(255, 255, 255, 0.12)"
+  },
+  "glass/ctrl-icon-off/border": {
+    "light": "rgba(255, 255, 255, 0.35)",
+    "dark": "rgba(255, 255, 255, 0.04)"
+  }
+}

@@ -1,0 +1,302 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   visionOS Views Materials — content surfaces (sit inside Windows/panels)
+   ───────────────────────────────────────────────────────────────────────────
+   2026-05-18 Leon — taxonomy 固化 (single source of truth).
+   4 variants:
+     .material-recessed  ← sunken inset (深陷入 + 4-stack inner shadow)
+     .material-thin      ← faintest light wash
+     .material-regular   ← mid darkening
+     .material-thick     ← heaviest darkening
+
+   ═══════════════════════════════════════════════════════════════════════════
+   2026-05-22 Leon round-68 — Z-C 落地:静态色版本(保留透明度)
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ HTML/CSS 架构限制 (empirically verified 2026-05-22 — verify-blend.html
+   pixel sampling 8-cell matrix Set A/B/C/D × multiply/color-burn/luminosity):
+     1. `isolation:isolate` 或子 z-index 创建新 SC → 阻断 descendant
+        `mix-blend-mode` blend (blend dst = transparent → NO-OP)。
+     2. GlassPane content wrapper 默认 `relative z-[3]` (站到 SVG stroke 之
+        上),形成 SC barrier,sub-card material-* 用 mix-blend-mode 时 dst
+        为 transparent → blend NO-OP → 渲染成 src 色直接覆盖 → 跟 Figma
+        adaptive material 视觉相反。
+     3. 即使 unblock SC,Chrome empirically blend dst = pane bg-color 单层
+        (rgba(128,128,128,0.30)) only,不包含 backdrop-filter blur 后的合
+        成可见色 — sub-card 拿不到 backdrop tint。Z-B 解锁 blend 只有 ~5%
+        增益,不值 GlassPane 全消费者回归风险。
+   决策:**保持 GlassPane 不动**,4 spec 改为**静态色 + mix-blend-mode normal**
+   实现,通过 alpha 透明度让 GlassPane backdrop tint 自然透出:
+     · 视觉 ≈ visionOS Figma adaptive material 80%(等比例 darken,完全保留
+       backdrop tint)
+     · 跨 GlassPane 消费者零风险(不依赖 SC 是否 isolated)
+     · 跨 light/dark mode 一致(:root + .dark cascade)
+   未来若上 X2 (SVG composite via `<feBlend>` / `<feComposite>`) 100% Figma
+   还原,在此处回写 .material-* 实现为 SVG filter。
+   ═══════════════════════════════════════════════════════════════════════════
+
+   家族区分 (两套共存):
+     .glass-*    → Windows (floating glass panels, backdrop-filter blur + tint;
+                  see tokens/glass.css)
+     .material-* → Views (content surfaces inside windows, static-alpha darken)
+
+   使用约定:
+     1. 元素自带 position 上下文 (block elements OK by default)。
+     2. 子内容自动 z-index:1 (`& > *` rule) 不被 overlay 盖。
+     3. rounded-* 在元素上设置,pseudo-element `border-radius: inherit` 自动跟。
+     4. <input> / <textarea> 不渲染 pseudo-elements → 需 wrapper div 套一层,
+        或仅用 box-shadow var (--material-recessed-inset-shadow) 单独应用。
+
+   SSOT — 调一处全同步:
+     所有 layer bg / inset shadow 抽到 `:root --material-*` vars (.dark cascade
+     override dark mode)。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Depth ranking (Leon 2026-05-22 round-69 矫正,对照 Figma 截图):
+     · Recessed   最深  +  4-stack inset shadow   (sunken / "carved-in")
+     · Thick      二深  (无 inset)
+     · Regular    三深  (无 inset)
+     · Thin       lift  (反向 — 微亮 wash,不在 darken 梯度)
+   round-68 Z-C 首版把 Thick alpha > Recessed alpha 弄反,本轮矫正。Recessed
+   light mode 同 dark 都带 inset shadow (round-51 "light 不要凹陷"是针对
+   sub-card 用 adaptive material 那种情况,Recessed 本身的凹陷 affordance 在
+   light/dark 都成立)。
+   ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Light mode 默认 ── */
+
+  /* Recessed: 最深 + 4-stack inset shadow
+     4-stack inset shadow — Figma Effects on Recessed swatch (node 139:23911):
+     2× top-down dark blur + 2× bottom-up white edge. "Carved-in" depth cue. */
+  --material-recessed-bg:            rgba(0, 0, 0, 0.12);
+  --material-recessed-inset-shadow:
+    inset 0 1.5px 4px 0 rgba(0, 0, 0, 0.10),
+    inset 0 1.5px 4px 0 rgba(0, 0, 0, 0.08),
+    inset 0 -0.5px 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -0.5px 1px 0 rgba(255, 255, 255, 0.30);
+
+  /* Thick: 二深 (无 inset) */
+  --material-thick-bg:               rgba(0, 0, 0, 0.08);
+
+  /* Regular: 三深 (无 inset) */
+  --material-regular-bg:             rgba(0, 0, 0, 0.05);
+
+  /* Thin: 反向 lift wash */
+  --material-thin-bg:                rgba(255, 255, 255, 0.10);
+}
+
+.dark {
+  /* ── Dark mode override (alpha 加深,dark backdrop 需要更明显 darken
+     才有"颜色比外围深 + 凹陷感") ── */
+  --material-recessed-bg:            rgba(0, 0, 0, 0.32);
+  --material-thick-bg:               rgba(0, 0, 0, 0.20);
+  --material-regular-bg:             rgba(0, 0, 0, 0.12);
+  --material-thin-bg:                rgba(255, 255, 255, 0.06);
+}
+
+/* ── Shared structural rules ── */
+.material-recessed,
+.material-thin,
+.material-regular,
+.material-thick {
+  position: relative;
+}
+/* Auto-lift direct children above blend overlay */
+.material-recessed > *,
+.material-thin > *,
+.material-regular > *,
+.material-thick > * {
+  position: relative;
+  z-index: 1;
+}
+.material-recessed::before,
+.material-thin::before,
+.material-regular::before,
+.material-thick::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  mix-blend-mode: normal; /* Z-C: 不依赖 blend chain,纯 alpha 叠加 */
+}
+
+/* ── Recessed: alpha darken + 4-stack inset shadow ── */
+.material-recessed::before { background: var(--material-recessed-bg); }
+.material-recessed         { box-shadow: var(--material-recessed-inset-shadow); }
+
+/* ── Thin: alpha wash (light: white 0.10 / dark: white 0.06) ── */
+.material-thin::before     { background: var(--material-thin-bg); }
+
+/* ── Regular: mid alpha darken ── */
+.material-regular::before  { background: var(--material-regular-bg); }
+
+/* ── Thick: heavy alpha darken ── */
+.material-thick::before    { background: var(--material-thick-bg); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Controls / Fills (visionOS) + Separator
+   ───────────────────────────────────────────────────────────────────────────
+   2026-05-18 round-16: 5 control fill states + Separator overlay
+                        verified from Figma.
+   2026-05-18 round-17: Hover alpha 适配 Desktop pointer-hover UX.
+
+     .fill-idle      ← node 139:23932 — default visible (layer 1 NO blend)
+     .fill-hover     ← node 139:23934 — Desktop-adjusted (alpha bumped above
+                                        Idle; Figma 原值 weaker than Idle 是
+                                        visionOS gaze-hover spec,不适合 Desktop)
+     .fill-pinch     ← node 139:23933 — active press (heaviest non-selected)
+     .fill-selected  ← node 139:23931 — full white + color-dodge (single layer)
+     .fill-disabled  ← node 139:23930 — Figma 原值保留 (visually muted; 不再
+                                        与 Hover 同值 because Hover 已被 Desktop
+                                        adjustment 拉高)
+     .fill-separator ← node 139:23903 — Separators/Separator overlay
+
+   ⚠️ visionOS state semantics 注意:
+     · Figma "Hover" 原值 < "Idle" — visionOS Hover = eye-tracking gaze
+       attention,subtle ambient feedback,不是 pointer-hover 的视觉强调.
+       Desktop 我们已把 Hover alpha 提升 (0.10/0.24) 让其 > Idle (0.07/0.18)
+       < Pinch (0.16/0.36),符合 pointer-hover 直觉.
+     · Pinch (Figma) = "捏合点击" active press,对应 web `:active`.
+   不做 :hover / :active auto-binding,consumer 按 UX 意图手动应用 class.
+
+   实现策略同 .material-* 原 spec: ::before + ::after 双层 mix-blend-mode overlay,
+   Selected 例外 (single layer,只用 ::before).
+   ⚠️ .fill-* 仍用 mix-blend-mode (Figma 原 spec) — 这套是 chip/icon-bg 尺度
+   小尺寸 control,跟 .material-* sub-card 尺度不同。consumer (Icon button /
+   chip) 通常不嵌套在 GlassPane content wrapper SC 内,或本身 SC 隔离对 fill 视
+   觉影响有限。如未来 .fill-* 也遇到 SC 阻断,再考虑同样 Z-C 化。
+
+   SSOT — 调一处全同步:
+     所有 layer bg / blend 抽到 `:root --fill-*-*` vars.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Idle — default visible control fill (layer 1 normal/no blend per Figma) */
+  --fill-idle-layer1-bg:        rgba(255, 255, 255, 0.07);
+  --fill-idle-layer1-blend:     normal;
+  --fill-idle-layer2-bg:        rgba(94, 94, 94, 0.18);
+  --fill-idle-layer2-blend:     color-dodge;
+
+  /* Hover — Desktop pointer-hover adjustment (2026-05-18 Leon round-17).
+     Figma 原值 (visionOS gaze-hover spec): 0.04 / 0.06 — 弱于 Idle.
+     Desktop pointer-hover 直觉是"hover 比 idle 更明显" → 提升 alpha 到
+     Idle 与 Pinch 之间约 40% 过渡点 (0.10 / 0.24). Blend modes 保留
+     原 visionOS spec (lighten + color-dodge) 不变. */
+  --fill-hover-layer1-bg:       rgba(255, 255, 255, 0.10);
+  --fill-hover-layer1-blend:    lighten;
+  --fill-hover-layer2-bg:       rgba(94, 94, 94, 0.24);
+  --fill-hover-layer2-blend:    color-dodge;
+
+  /* Pinch — active press (heaviest non-selected) */
+  --fill-pinch-layer1-bg:       rgba(255, 255, 255, 0.16);
+  --fill-pinch-layer1-blend:    lighten;
+  --fill-pinch-layer2-bg:       rgba(94, 94, 94, 0.36);
+  --fill-pinch-layer2-blend:    color-dodge;
+
+  /* Selected — single layer 100% white + color-dodge */
+  --fill-selected-bg:           rgba(255, 255, 255, 1.00);
+  --fill-selected-blend:        color-dodge;
+
+  /* Disabled — Figma 原值保留 (0.04/0.06,visually muted on dark BG).
+     Note: Figma 中 Hover ≡ Disabled,但 round-17 已把 Desktop Hover 拉高,
+     这里 Disabled 保持原 Figma 值不动 (禁用反馈需要"被压暗"的 affordance). */
+  --fill-disabled-layer1-bg:    rgba(255, 255, 255, 0.04);
+  --fill-disabled-layer1-blend: lighten;
+  --fill-disabled-layer2-bg:    rgba(94, 94, 94, 0.06);
+  --fill-disabled-layer2-blend: color-dodge;
+
+  /* Separator — hairline overlay (between Idle and Hover in intensity) */
+  --fill-separator-layer1-bg:    rgba(255, 255, 255, 0.07);
+  --fill-separator-layer1-blend: lighten;
+  --fill-separator-layer2-bg:    rgba(94, 94, 94, 0.15);
+  --fill-separator-layer2-blend: color-dodge;
+}
+
+/* ── Shared structural rules (fills + separator) ── */
+.fill-idle,
+.fill-hover,
+.fill-pinch,
+.fill-selected,
+.fill-disabled,
+.fill-separator {
+  position: relative;
+}
+.fill-idle > *,
+.fill-hover > *,
+.fill-pinch > *,
+.fill-selected > *,
+.fill-disabled > *,
+.fill-separator > * {
+  position: relative;
+  z-index: 1;
+}
+.fill-idle::before, .fill-idle::after,
+.fill-hover::before, .fill-hover::after,
+.fill-pinch::before, .fill-pinch::after,
+.fill-disabled::before, .fill-disabled::after,
+.fill-separator::before, .fill-separator::after,
+/* Selected: single layer — only ::before */
+.fill-selected::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ── Idle: 2 layers (layer 1 normal, layer 2 color-dodge) ── */
+.fill-idle::before {
+  background:     var(--fill-idle-layer1-bg);
+  mix-blend-mode: var(--fill-idle-layer1-blend);
+}
+.fill-idle::after {
+  background:     var(--fill-idle-layer2-bg);
+  mix-blend-mode: var(--fill-idle-layer2-blend);
+}
+
+/* ── Hover: 2 layers (lighten + color-dodge), weakest values ── */
+.fill-hover::before {
+  background:     var(--fill-hover-layer1-bg);
+  mix-blend-mode: var(--fill-hover-layer1-blend);
+}
+.fill-hover::after {
+  background:     var(--fill-hover-layer2-bg);
+  mix-blend-mode: var(--fill-hover-layer2-blend);
+}
+
+/* ── Pinch: 2 layers (lighten + color-dodge), heaviest ── */
+.fill-pinch::before {
+  background:     var(--fill-pinch-layer1-bg);
+  mix-blend-mode: var(--fill-pinch-layer1-blend);
+}
+.fill-pinch::after {
+  background:     var(--fill-pinch-layer2-bg);
+  mix-blend-mode: var(--fill-pinch-layer2-blend);
+}
+
+/* ── Selected: single layer 100% white + color-dodge ── */
+.fill-selected::before {
+  background:     var(--fill-selected-bg);
+  mix-blend-mode: var(--fill-selected-blend);
+}
+
+/* ── Disabled: 2 layers (matches Hover spec per Figma) ── */
+.fill-disabled::before {
+  background:     var(--fill-disabled-layer1-bg);
+  mix-blend-mode: var(--fill-disabled-layer1-blend);
+}
+.fill-disabled::after {
+  background:     var(--fill-disabled-layer2-bg);
+  mix-blend-mode: var(--fill-disabled-layer2-blend);
+}
+
+/* ── Separator: 2 layers (lighten + color-dodge) ── */
+.fill-separator::before {
+  background:     var(--fill-separator-layer1-bg);
+  mix-blend-mode: var(--fill-separator-layer1-blend);
+}
+.fill-separator::after {
+  background:     var(--fill-separator-layer2-bg);
+  mix-blend-mode: var(--fill-separator-layer2-blend);
+}

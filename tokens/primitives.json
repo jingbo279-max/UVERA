@@ -1,0 +1,14 @@
+{
+  "color/raw/stone/50": {
+    "light": "#fafaf9"
+  },
+  "color/raw/stone/900": {
+    "light": "#1c1917"
+  },
+  "color/raw/violet/600": {
+    "light": "#7c3aed"
+  },
+  "color/raw/violet/400": {
+    "light": "#a78bfa"
+  }
+}

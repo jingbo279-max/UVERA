@@ -1,0 +1,67 @@
+.vercel
+dist/
+node_modules/
+.env
+.env.local
+.env*.local
+.claude/
+
+# SSL certs
+cert.pem
+key.pem
+mutao.xyz.*
+u.mutao.xyz.*
+
+# Media (managed separately — any subdirectory)
+**/public/assets/media/
+**/public/assets/covers/
+*.mp4
+*.mp3
+
+# Exception: UI chrome static videos (hero backgrounds etc.) — tracked in repo
+!public/videos/*.mp4
+
+# OS / editor
+.DS_Store
+.mcp.json
+longvv.code-workspace
+
+# Project config — kept LOCAL only (NOT for repo / shared dev assets)
+# §2026-05-26 fei: CLAUDE.md REMOVED from ignore — it's now the team-shared
+#   source-of-truth for deploy protocol + project conventions (lives at
+#   project root, auto-picked-up by every Claude Code session). Update it
+#   when conventions change.
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
+
+# wrangler logs
+wrangler.log
+
+# vite cache
+.vite/
+
+# Local debug scripts
+debug_*.js
+query_*.js
+test_*.js
+
+# 本地独立调试仓库(自带 .git,勿并入本仓库)
+04-Development/
+
+# FFmpeg core copied from node_modules at build time (32 MB wasm; do not commit)
+public/ffmpeg/
+
+# VitePress (docs 阅读站) 产物
+docs/.vitepress/cache
+docs/.vitepress/dist
+
+# Sentry 只读 API token(本地,勿提交)
+.sentry-token
+
+# Sentry build-plugin auth token(source map 上传用,本地,勿提交)
+.env.sentry-build-plugin
+.superpowers/

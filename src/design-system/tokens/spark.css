@@ -1,0 +1,82 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Spark 模式专用视频样式
+   ───────────────────────────────────────────────────────────────────────────
+   历史根因（依次发现、逐个解决）：
+
+   (1) `@cloudflare/stream-react` 的 <Stream responsive={true}>（默认）会给
+       iframe 外层 Container <div> 注入 `padding-top: videoH/videoW*100%`
+       来锁定 AR。Container 在 Spark slot (9:16) 里只占顶部一段（16:9 视频
+       → 56.25% 宽度高），底部露出 <img> poster 形成"两张图 + 中间 gap"。
+       HeroCard 视频绕开 Stream 直接用 native <video>，所以无此 bug。
+
+   (2) CF Stream iframe 内部播放器抛 "An unknown error occurred" 时，iOS
+       会把 touch 吞给 iframe，外层 Spark 的 onTouchStart 收不到 → swipe
+       手势挂死、无法切换下一条内容。
+
+   (3) iOS Safari 在 <video> 元素上不稳定地 honour `object-fit: cover`：
+       autoplay-blocked / 加载过渡态会退化成 contain（width-fill + 上下
+       letterbox），导致 16:9 素材在 9:16 slot 里先 cover 后 contain 的
+       "收缩闪帧"。HeroCard 无此 bug 是巧合（容器 16:9 与视频 16:9 AR 相同，
+       cover/contain 视觉等价）。
+
+   本文件职责：
+     - `.spark-stream-fill`：覆盖 Stream Container 的 inline padding-top AR
+       hack + 强制 iframe 100%×100% 铺满父容器；iframe pointer-events:none
+       让 touch 穿透到外层 Spark 手势区（防 CF player error 吞 swipe）
+     - `.spark-stream-cover`：外层 wrapper，由 JS 按运行时 cover-scale 算出
+       的 px width/height 居中套在 slot 中心，内部 Stream / iframe 靠
+       `.spark-stream-fill` 规则填满 wrapper。绕开 iOS <video> object-fit
+       不稳定的问题。Native <video> 不需要 wrapper（可直接 inline style），
+       Stream 需要 wrapper 因为 Stream 组件不透传 `style` prop（只接
+       `className`，见 node_modules/@cloudflare/stream-react/dist/
+       stream-react.esm.js props 解构列表）。
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Stream 内部 Container + iframe 强制铺满父容器 ─────────────────────── */
+.spark-stream-fill {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  /* 覆盖 <Stream responsive=true> 时 Container 的 padding-top AR hack */
+  padding-top: 0 !important;
+}
+
+.spark-stream-fill iframe {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
+  display: block !important;
+  /* 让 touch/click 穿透到外层 Spark 手势区，防止 CF player 内部 error
+   * 弹窗或加载 overlay 吞掉 swipe 手势导致用户卡死 */
+  pointer-events: none !important;
+}
+
+/* ── Cover-scale wrapper（由 SparkMode.jsx 运行时按 px 尺寸套在 slot 中心） ── */
+.spark-stream-cover {
+  overflow: hidden;
+}
+.spark-stream-cover > .spark-stream-fill {
+  /* wrapper 已由 JS 给出 px width/height，内部 Stream Container 填满即可 */
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding-top: 0 !important;
+}
+
+/* ── 防止 iOS Safari 在沉浸播放时弹出文字选择 / 长按菜单 / 输入光标 ──────────
+ * iOS Safari 不总是继承父级 user-select:none（尤其当子元素有
+ * pointer-events:auto 时），必须显式声明。
+ * -webkit-touch-callout:none 阻止长按弹出「复制/查找…」气泡。
+ * -webkit-tap-highlight-color:transparent 消除 iOS 点击高亮覆盖层。 */
+.spark-immersive,
+.spark-immersive * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}

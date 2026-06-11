@@ -1,0 +1,462 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Self-hosted fonts — 2026-05-09 Leon (Latin) + 费 (CJK)
+   全部 4 个 family woff2 自托管在 /public/fonts/
+     · Inter Variable          340 KB  — 主 sans-serif (Latin/数字)
+     · Crimson Pro Variable     84 KB  — serif headings (Subscription / SelfProfile)
+     · Noto Sans SC Variable   7.4 MB  — 简体中文
+     · Noto Sans TC Variable   5.2 MB  — 繁体中文
+
+   费决策: 中国境内高速网络已普及，CJK 5-7MB 可接受。
+   font-display: swap — 加载期间 system font fallback 不阻塞 paint。
+   CJK 不 preload (太大会拖慢首屏)，让浏览器按需 lazy fetch。
+   ═══════════════════════════════════════════════════════════════════════════ */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/Inter-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Crimson Pro';
+  src: url('/fonts/CrimsonPro-Variable.woff2') format('woff2-variations');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Noto Sans SC';
+  src: url('/fonts/NotoSansSC-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4E00-9FFF, U+3000-303F, U+FF00-FFEF, U+2018-201F;
+}
+@font-face {
+  font-family: 'Noto Sans TC';
+  src: url('/fonts/NotoSansTC-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+4E00-9FFF, U+3000-303F, U+FF00-FFEF, U+2018-201F;
+}
+
+/* 2026-05-08 — Tailwind v4 class-based dark mode strategy.
+ * 默认 Tailwind v4 的 dark: 工具类走 @media (prefers-color-scheme: dark)，
+ * 与项目 .dark class（IndexPage useEffect 添加）不同步。声明 @custom-variant
+ * 让 dark: 工具类跟随 .dark class，与 CSS 变量 (.dark { --color-... }) 行为
+ * 一致 — 用户选 'Dark Mode' / 'Light Mode' / 'System Default' 都生效。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   iOS 16.x Safari fallback — Tailwind v4 base tokens
+   ───────────────────────────────────────────────────────────────────────────
+   2026-04-26 复现：iPhone X iOS 16.7.15 Safari 全站样式失效
+     - Tailwind 尺寸工具：w-* / h-* / top-* / inset-* / p-* / m-* 等失效
+       → Logo 巨大、badge 漂浮到卡片中央、layout 塌缩
+     - 字体：所有文本变 serif（Times Roman 系统兜底）
+     - 颜色：text-label / text-accent / bg-background-* / bg-fill-* 全失效
+       → 所有文字变黑、tag chip 无背景、active 状态无强调色
+
+   根因：Tailwind v4 的 @theme { ... } 编译出
+     @layer theme { :root, :host { 海量 oklch() ... --spacing / --color-* / --font-* } }
+   iOS 16.7 在多 oklch() 声明 + :root,:host 选择器列表 + layered 规则组合下
+   silent-drop 整块 → 所有 var() 引用 fallback 到 invalid。
+
+   修法：在 unlayered :root 把项目实际用到的关键 token 全部再写一遍。
+   unlayered 优先级最高于任何 @layer 内规则，即便 @layer theme 整块被吞
+   下面这套仍生效。覆盖范围：
+     - --spacing（Tailwind v4 spacing 工具基础）
+     - --font-family-sans（html/body 字体）
+     - --color-label / --color-background / --color-accent / --color-fill 家族
+     - --color-channel-* / --color-separator / --color-destructive
+     - 上述变量引用的 raw primitive 颜色
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Tailwind v4 spacing base */
+  --spacing: 0.25rem;
+
+  /* Raw primitive colors（被 semantic 引用，必须先存在）*/
+  --color-raw-stone-50:    #fafaf9;
+  --color-raw-stone-900:   #1c1917;
+  --color-raw-violet-400:  #a78bfa;
+  --color-raw-violet-600:  #7c3aed;
+
+  /* Semantic — text */
+  --color-label:              #1c1917;
+  --color-label-secondary:    #78716c;
+  --color-label-tertiary:     #a8a29e;
+  --color-label-quaternary:   #d6d3d1;
+
+  /* Semantic — background */
+  --color-background:           #fafaf9;
+  --color-background-secondary: #f5f5f4;
+  --color-background-tertiary:  #e7e5e4;
+
+  /* Semantic — separator */
+  --color-separator:          rgba(0,0,0,0.08);
+  --color-separator-opaque:   #c6c6c8;
+
+  /* Semantic — accent / destructive
+   * 2026-05-11 Leon — brand 色升级为 #5B53FF (蓝紫,电光感),
+   * 取代原 violet-600 #7c3aed。配套 accent-bg = #5B53FF 最浅 tint #ecebff。
+   * Dark mode lift 见 .dark block。raw-violet-* primitive 保留(向后兼容)。 */
+  --color-accent:             #5B53FF;
+  --color-accent-bg:          #ecebff;
+  --color-destructive:        #ef4444;
+
+  /* iOS systemFill family */
+  --color-fill:               rgba(0, 0, 0, 0.05);
+  --color-fill-secondary:     rgba(0, 0, 0, 0.08);
+  --color-fill-tertiary:      rgba(0, 0, 0, 0.12);
+  --color-fill-quaternary:    rgba(0, 0, 0, 0.18);
+
+  /* Channel accents */
+  --color-channel-home:   #78716c;
+  --color-channel-clips:  #f59e0b;
+  --color-channel-story:  #64748b;
+  --color-channel-sound:  #7c3aed;
+  --color-channel-create: #06b6d4;
+  --color-channel-live:   #ec4899;
+
+  /* Typography */
+  --font-family-sans:
+    "Inter",
+    "Noto Sans SC",
+    "Noto Sans TC",
+    "PingFang SC",
+    "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Radius — 卡片圆角 / 按钮 / 玻璃 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-pill: 9999px;
+  --radius-glass: 32px;
+
+  /* Tailwind v4 palette — used by text-white / bg-red-500 / fill-amber-400 等
+   * 全部用 sRGB hex（v3 等价）替代 Tailwind v4 的 oklch()，绕开 iOS 16.7 silent-drop。 */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* red */
+  --color-red-50:  #fef2f2;
+  --color-red-100: #fee2e2;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
+
+  /* orange / amber / yellow */
+  --color-orange-100: #ffedd5;
+  --color-orange-400: #fb923c;
+  --color-orange-500: #f97316;
+  --color-amber-100:  #fef3c7;
+  --color-amber-400:  #fbbf24;
+  --color-amber-500:  #f59e0b;
+  --color-yellow-400: #facc15;
+  --color-yellow-500: #eab308;
+
+  /* green / emerald / lime */
+  --color-green-100:    #dcfce7;
+  --color-green-500:    #22c55e;
+  --color-emerald-100:  #d1fae5;
+  --color-emerald-400:  #34d399;
+  --color-emerald-500:  #10b981;
+  --color-emerald-600:  #059669;
+  --color-emerald-700:  #047857;
+  --color-emerald-900:  #064e3b;
+  --color-lime-400:     #a3e635;
+
+  /* cyan / sky / blue */
+  --color-cyan-100:  #cffafe;
+  --color-cyan-500:  #06b6d4;
+  --color-sky-500:   #0ea5e9;
+  --color-blue-100:  #dbeafe;
+  --color-blue-500:  #3b82f6;
+  --color-blue-600:  #2563eb;
+
+  /* indigo / violet / purple */
+  --color-indigo-50:  #eef2ff;
+  --color-indigo-100: #e0e7ff;
+  --color-indigo-500: #6366f1;
+  --color-indigo-600: #4f46e5;
+  --color-violet-100: #ede9fe;
+  --color-violet-400: #a78bfa;
+  --color-violet-500: #8b5cf6;
+  --color-violet-600: #7c3aed;
+  --color-violet-900: #4c1d95;
+  --color-purple-500: #a855f7;
+
+  /* fuchsia / pink / rose */
+  --color-fuchsia-100: #fae8ff;
+  --color-pink-100:    #fce7f3;
+  --color-pink-500:    #ec4899;
+  --color-rose-500:    #f43f5e;
+
+  /* neutrals */
+  --color-slate-500: #64748b;
+  --color-slate-700: #334155;
+  --color-gray-300:  #d1d5db;
+  --color-gray-500:  #6b7280;
+  --color-zinc-300:  #d4d4d8;
+  --color-zinc-500:  #71717a;
+  --color-stone-50:  #fafaf9;
+  --color-stone-300: #d6d3d1;
+  --color-stone-500: #78716c;
+  --color-stone-900: #1c1917;
+}
+
+/* Dark mode 同步覆盖 — .dark 已是 unlayered（line ~137），不受 silent-drop 影响，
+ * 但若它依赖的 base value 缺失，cascade 链断。下面再确认 .dark 用到的 raw 也 ok。*/
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Design System Tokens — @theme definitions
+   ───────────────────────────────────────────────────────────────────────────
+   Tier 1: Primitive (internal reference only — components use Semantic)
+   Tier 2: Semantic  (components use these)
+   Typography, Spacing, Radius
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Global Base — apply font stack to entire document ───────────────────── */
+@layer base {
+  html, body {
+    font-family: var(--font-family-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* 2026-04-28 PWA standalone mode 底部 safe-area-inset-bottom 区域如未被 app
+     * 容器覆盖，会 fall back 到 user agent 默认白色。设 body/html bg 匹配
+     * theme-color (#0B0E15)，让 home-indicator 区域始终融入 dark 主题。
+     * 影响：light mode 用户在 app 容器没覆盖处会瞥见暗色。Uvera 主路径全 dark
+     * 主题，AuthPage 也是 dark，影响范围窄到 PWA chrome 的 safe-area。 */
+    background: #0B0E15;
+  }
+
+  /* iOS Safari: font-size < 16px on inputs triggers auto-zoom on focus.
+     Force 16px minimum to disable zoom while preserving visual size. */
+  input, select, textarea {
+    font-size: max(16px, 1em);
+  }
+
+  /* Remove iOS tap highlight on all interactive elements */
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@theme {
+  /* ── Primitive Colors (internal reference) ──────────────────────────── */
+  --color-raw-stone-50:    #fafaf9;
+  --color-raw-stone-900:   #1c1917;
+  --color-raw-violet-600:  #7c3aed;
+  --color-raw-violet-400:  #a78bfa;
+
+  /* ── Semantic Colors (components use these) ─────────────────────────── */
+  --color-label:              var(--color-raw-stone-900);
+  --color-label-secondary:    #78716c;
+  --color-label-tertiary:     #a8a29e;
+  --color-label-quaternary:   #d6d3d1;
+
+  /* ── visionOS Text vibrancy on dark / glass surfaces ──────────────────
+   * Apple visionOS Materials text spec — slightly lower opacity than iOS
+   * Labels（更适合 dark glass 上的 vibrancy 层次）。专用于 Spark 等 dark
+   * 沉浸式 / glass-heavy 场景；与 --color-label-* (iOS spec) 并行存在。
+   * 通过 dual-track design system Phase B 桌面体系自动启用。
+   * Tailwind classes: text-vision-primary / -secondary / -tertiary / -quaternary */
+  --color-vision-primary:     rgba(255, 255, 255, 1.00);   /* visionOS Primary  */
+  --color-vision-secondary:   rgba(255, 255, 255, 0.55);   /* visionOS Secondary */
+  --color-vision-tertiary:    rgba(255, 255, 255, 0.25);   /* visionOS Tertiary  */
+  --color-vision-quaternary:  rgba(255, 255, 255, 0.10);   /* visionOS Quaternary */
+  --color-background:         var(--color-raw-stone-50);
+  --color-background-secondary: #f5f5f4;
+  --color-background-tertiary:  #e7e5e4;
+  --color-separator:          rgba(0,0,0,0.08);
+  --color-separator-opaque:   #c6c6c8;                    /* iOS UIColor.opaqueSeparator */
+  --color-accent:             #5B53FF;                    /* brand 主色 (2026-05-11) */
+  --color-accent-bg:          #ecebff;                    /* brand 最浅 tint */
+  --color-destructive:        #ef4444;                    /* iOS systemRed (light) */
+
+  /* iOS systemFill family — neutral decorative fills (buttons, input backgrounds, chips) */
+  --color-fill:               rgba(0, 0, 0, 0.05);        /* .systemFill */
+  --color-fill-secondary:     rgba(0, 0, 0, 0.08);        /* .secondarySystemFill */
+  --color-fill-tertiary:      rgba(0, 0, 0, 0.12);        /* .tertiarySystemFill */
+  --color-fill-quaternary:    rgba(0, 0, 0, 0.18);        /* .quaternarySystemFill */
+
+  /* ── Channel Accent Colors ─────────────────────────────────────────── */
+  --color-channel-home:   #78716c;
+  --color-channel-clips:  #f59e0b;
+  --color-channel-story:  #64748b;
+  --color-channel-sound:  #7c3aed;
+  --color-channel-create: #06b6d4;
+  --color-channel-live:   #ec4899;
+
+  /* ── Typography (Uvera Type Scale) ─────────────────────────────────── */
+  --font-family-sans:
+    "Inter",           /* Latin, numbers, symbols */
+    "Noto Sans SC",    /* 简体中文 */
+    "Noto Sans TC",    /* 繁體中文 */
+    "PingFang SC",     /* Apple 设备系统兜底 */
+    "Microsoft YaHei", /* Windows 兜底 */
+    -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --font-size-large-title: 2.125rem;   /* 34px */
+  --font-size-title1:      1.75rem;    /* 28px */
+  --font-size-title2:      1.375rem;   /* 22px */
+  --font-size-title3:      1.25rem;    /* 20px */
+  --font-size-headline:    1.0625rem;  /* 17px — semibold */
+  --font-size-body:        1.0625rem;  /* 17px */
+  --font-size-callout:     1rem;       /* 16px */
+  --font-size-subheadline: 0.9375rem;  /* 15px */
+  --font-size-footnote:    0.8125rem;  /* 13px */
+  --font-size-caption1:    0.75rem;    /* 12px */
+  --font-size-caption2:    0.6875rem;  /* 11px */
+
+  /* ── Spacing (8pt Grid) ────────────────────────────────────────────── */
+  /* NOTE: 不放在 @theme 里，避免被 Tailwind v4 映射为 max-w-sm/w-sm 等工具类
+     实际值见下方 :root 块，通过 var(--spacing-sm) 访问 */
+
+  /* ── Radius ────────────────────────────────────────────────────────── */
+  --radius-sm: 8px;   --radius-md: 12px;  --radius-lg: 16px;
+  --radius-xl: 20px;  --radius-2xl: 24px; --radius-pill: 9999px;
+  --radius-glass: 32px;
+
+  /* ── Touch Target ──────────────────────────────────────────────────── */
+  --spacing-touch-target:             44px;   /* HIG legal minimum */
+  --spacing-touch-target-comfortable: 50px;   /* iOS 26 default comfortable */
+
+  /* ── Hero Gradient (Discover home V1) ──────────────────────────────── */
+  --gradient-hero-discover: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-accent) 12%, var(--color-background)) 0%,
+    color-mix(in srgb, var(--color-accent) 6%, var(--color-background-secondary)) 50%,
+    var(--color-background) 100%
+  );
+}
+
+/* ── Spacing Tokens (8pt Grid) — 放在 :root 避免污染 Tailwind v4 namespace ── */
+:root {
+  --spacing-xs:  4px;   --spacing-sm:  8px;   --spacing-md:  12px;
+  --spacing-lg:  16px;  --spacing-xl:  20px;  --spacing-2xl: 24px;
+  --spacing-3xl: 32px;  --spacing-4xl: 40px;  --spacing-5xl: 48px;
+}
+
+/* ── Dark Mode Semantic Overrides ────────────────────────────────────── */
+.dark {
+  --color-label:              var(--color-raw-stone-50);
+  --color-label-secondary:    #a8a29e;
+  --color-label-tertiary:     #78716c;
+  --color-label-quaternary:   #44403c;
+  --color-background:         var(--color-raw-stone-900);
+  --color-background-secondary: #292524;
+  --color-background-tertiary:  #44403c;
+  --color-separator:          rgba(255,255,255,0.08);
+  --color-separator-opaque:   #38383a;                      /* iOS opaqueSeparator (dark) */
+  --color-accent:             #8C85FF;                      /* brand #5B53FF lifted for dark bg */
+  --color-accent-bg:          rgba(91, 83, 255, 0.15);     /* brand rgba 浅垫 */
+  --color-destructive:        #ff453a;                      /* iOS systemRed (dark) */
+
+  --color-fill:               rgba(255, 255, 255, 0.08);
+  --color-fill-secondary:     rgba(255, 255, 255, 0.12);
+  --color-fill-tertiary:      rgba(255, 255, 255, 0.18);
+  --color-fill-quaternary:    rgba(255, 255, 255, 0.26);
+
+  --gradient-hero-discover: linear-gradient(
+    135deg,
+    #1a1230 0%,
+    #2d1b69 50%,
+    #0c1e3a 100%
+  );
+}
+
+/* ── Range Slider (Free Mode duration) ────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-accent, #5B53FF);
+  box-shadow: 0 2px 6px rgba(91, 83, 255, 0.35);
+  border: 2px solid #fff;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 10px rgba(91, 83, 255, 0.45);
+}
+input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-accent, #5B53FF);
+  box-shadow: 0 2px 6px rgba(91, 83, 255, 0.35);
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+}
+
+/* ── Video Player Sliders (scoped neutral knob) ──────────────────────────
+ * §2026-05-28 Leon round-96 — 视频播放器 progress/volume slider knob 不使用
+ * 品牌色 (purple) — 避免品牌色暴露过度,抢视频主体焦点 (Apple HIG / iOS /
+ * macOS / YouTube / B 站 视频控件均用中性白半透明 knob)。
+ *
+ * 仅 PlayerActionBar 两个 slider 加 `.uvera-player-slider` scope class,
+ * 不动全局 input[type="range"] thumb 规则 (Free Mode duration 等品牌紫
+ * 强调的非视频 slider 保留品牌色)。
+ *
+ * Spec:12×12 圆,纯白 (95% alpha),subtle drop shadow,无 border。 */
+input[type="range"].uvera-player-slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+input[type="range"].uvera-player-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+input[type="range"].uvera-player-slider::-webkit-slider-thumb:active {
+  transform: scale(1.1);
+}
+input[type="range"].uvera-player-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Module Imports ──────────────────────────────────────────────────── */
+@import "./glass.css";
+
+/* ── Utility: hide scrollbar (cross-browser) ─────────────────────────── */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar { display: none; }
+}
+@import "./buttons.css";
+@import "./animations.css";
+@import "./backgrounds.css";
+@import "./spark.css";
+@import "./materials.css";

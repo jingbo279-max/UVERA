@@ -1,0 +1,351 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Background System — channel-aware mesh gradients with dark mode
+   data-channel on root container: discover | clips | story | sound | create | live
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Structural Layer Classes ─────────────────────────────────────────── */
+.bg-base {
+  position: fixed; inset: 0;
+  transition: background 0.6s ease;
+}
+
+/* Theme-toggle race-kill: 主题切换瞬间禁用所有 transition,
+   避免 #131a1c → #c7c7c7 的 0.6s 插值经过中灰造成「逐渐变亮」扫描感。
+   index.jsx applies `.theme-transitioning` 在 .dark toggle 之前,2 rAF 后移除。
+   覆盖所有元素的 transition / animation,确保色彩瞬变。 */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+.bg-mesh {
+  position: fixed; inset: 0;
+  animation: bgBreathe 22s ease-in-out infinite alternate;
+  will-change: transform;
+  transition: background 0.6s ease;
+}
+.bg-vignette {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  transition: background 0.6s ease;
+}
+:not(.dark) .bg-vignette {
+  background: radial-gradient(ellipse 88% 82% at 50% 50%,
+    transparent 36%, rgba(15,10,30,0.06) 100%);
+}
+.dark .bg-vignette {
+  background: radial-gradient(ellipse 88% 82% at 50% 50%,
+    transparent 28%, rgba(0,0,0,0.45) 100%);
+}
+.bg-grain {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+/* ── --page-bg: exposed for Hero fade bridge gradient endpoint ───────── */
+[data-channel="discover"]   { --page-bg: #fafaf9; }
+.dark [data-channel="discover"]   { --page-bg: #1c1917; }
+[data-channel="clips"]  { --page-bg: #fffbeb; }
+.dark [data-channel="clips"]  { --page-bg: #451a03; }
+[data-channel="story"]  { --page-bg: #f8fafc; }
+.dark [data-channel="story"]  { --page-bg: #0f172a; }
+[data-channel="sound"]  { --page-bg: #f5f3ff; }
+.dark [data-channel="sound"]  { --page-bg: #2e1065; }
+[data-channel="create"]      { --page-bg: #c7c7c7; }
+.dark [data-channel="create"] { --page-bg: #131a1c; }
+[data-channel="live"]   { --page-bg: #fdf2f8; }
+.dark [data-channel="live"]   { --page-bg: #500724; }
+
+/* ── Discover page · stone-50 / stone-800 · 5-channel mixed orbs ──────── */
+[data-channel="discover"] > .bg-base { background: #fafaf9; }
+.dark [data-channel="discover"] > .bg-base { background: #1c1917; }
+
+/* Discover light: Violet dominant on left (Sidebar zone), other channels at edges */
+[data-channel="discover"] > .bg-mesh {
+  background:
+    /* Sound·Violet — 左侧垂直中心主角 */
+    radial-gradient(ellipse 70% 75% at -5% 50%,  rgba(124,58,237, 0.52) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 50% at  8% 50%,  rgba(139,92,246, 0.34) 0%, transparent 55%),
+    /* Spark·Amber — 左下角 */
+    radial-gradient(ellipse 72% 55% at -8% 105%, rgba(245,158,11, 0.42) 0%, transparent 62%),
+    radial-gradient(ellipse 40% 36% at  6%  78%, rgba(217,119,6,  0.28) 0%, transparent 54%),
+    /* Story·Slate — 左上角 */
+    radial-gradient(ellipse 60% 50% at -6%  -4%, rgba(100,116,139,0.36) 0%, transparent 60%),
+    radial-gradient(ellipse 34% 32% at  7%  18%, rgba(71,85,105,  0.24) 0%, transparent 52%),
+    /* Create·Cyan — 右上角 */
+    radial-gradient(ellipse 58% 50% at 112%  -2%, rgba(6,182,212, 0.30) 0%, transparent 62%),
+    radial-gradient(ellipse 34% 30% at  86%  12%, rgba(14,116,144,0.20) 0%, transparent 52%),
+    /* Live·Pink — 右下角 */
+    radial-gradient(ellipse 55% 58% at 114% 105%, rgba(236,72,153,0.32) 0%, transparent 62%),
+    radial-gradient(ellipse 34% 38% at  90%  78%, rgba(190,24,93, 0.20) 0%, transparent 52%),
+    /* 中心焦点 — 右移，留出左侧色彩空间 */
+    radial-gradient(ellipse 30% 36% at 65% 50%,  rgba(255,255,255,0.38) 0%, transparent 58%);
+}
+.dark [data-channel="discover"] > .bg-mesh {
+  background:
+    /* Sound·Violet — 左侧垂直中心 */
+    radial-gradient(ellipse 70% 75% at -5% 50%,  rgba(139,92,246, 0.55) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 50% at  8% 50%,  rgba(109,40,217, 0.38) 0%, transparent 55%),
+    /* Spark·Amber — 左下 */
+    radial-gradient(ellipse 72% 55% at -8% 105%, rgba(245,158,11, 0.48) 0%, transparent 62%),
+    radial-gradient(ellipse 40% 36% at  6%  78%, rgba(146,64,14,  0.34) 0%, transparent 54%),
+    /* Story·Slate — 左上 */
+    radial-gradient(ellipse 60% 50% at -6%  -4%, rgba(100,116,139,0.42) 0%, transparent 60%),
+    radial-gradient(ellipse 34% 32% at  7%  18%, rgba(30,41,59,   0.38) 0%, transparent 52%),
+    /* Create·Cyan — 右上 */
+    radial-gradient(ellipse 58% 50% at 112%  -2%, rgba(6,182,212, 0.34) 0%, transparent 62%),
+    radial-gradient(ellipse 34% 30% at  86%  12%, rgba(14,116,144,0.28) 0%, transparent 52%),
+    /* Live·Pink — 右下 */
+    radial-gradient(ellipse 55% 58% at 114% 105%, rgba(236,72,153,0.38) 0%, transparent 62%),
+    radial-gradient(ellipse 34% 38% at  90%  78%, rgba(190,24,93, 0.26) 0%, transparent 52%),
+    /* 中心焦点暗色 */
+    radial-gradient(ellipse 50% 60% at 65% 50%,  rgba(15,10,30,  0.50) 0%, transparent 68%);
+}
+
+/* ── Clips · amber-50 / amber-950 ────────────────────────────────────── */
+[data-channel="clips"] > .bg-base { background: #fffbeb; }
+.dark [data-channel="clips"] > .bg-base { background: #451a03; }
+
+[data-channel="clips"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 15% 90%,  rgba(245,158,11,0.32) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 50% at 85% 80%,  rgba(217,119,6, 0.24) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 45% at 50% -5%,  rgba(251,191,36,0.20) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 90% 15%,  rgba(146,64,14, 0.14) 0%, transparent 58%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(255,255,255,0.58) 0%, transparent 70%);
+}
+.dark [data-channel="clips"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 15% 90%,  rgba(245,158,11,0.40) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 50% at 85% 80%,  rgba(217,119,6, 0.35) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 45% at 50% -5%,  rgba(251,191,36,0.25) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 40% at 90% 15%,  rgba(146,64,14, 0.30) 0%, transparent 58%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(0,0,0,0.28) 0%, transparent 70%);
+}
+
+/* ── Story · slate-50 / slate-900 ────────────────────────────────────── */
+[data-channel="story"] > .bg-base { background: #f8fafc; }
+.dark [data-channel="story"] > .bg-base { background: #0f172a; }
+
+[data-channel="story"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 10% 85%,  rgba(100,116,139,0.26) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 50% at 88% 75%,  rgba(71,85,105,  0.20) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 48% at 48% -6%,  rgba(148,163,184,0.18) 0%, transparent 62%),
+    radial-gradient(ellipse 42% 38% at 92% 12%,  rgba(30,41,59,   0.14) 0%, transparent 56%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(255,255,255,0.58) 0%, transparent 70%);
+}
+.dark [data-channel="story"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 10% 85%,  rgba(100,116,139,0.38) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 50% at 88% 75%,  rgba(71,85,105,  0.32) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 48% at 48% -6%,  rgba(148,163,184,0.22) 0%, transparent 62%),
+    radial-gradient(ellipse 42% 38% at 92% 12%,  rgba(30,41,59,   0.40) 0%, transparent 56%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(0,0,0,0.28) 0%, transparent 70%);
+}
+
+/* ── Sound · violet-50 / violet-950 ──────────────────────────────────── */
+[data-channel="sound"] > .bg-base { background: #f5f3ff; }
+.dark [data-channel="sound"] > .bg-base { background: #2e1065; }
+
+[data-channel="sound"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 12% 88%,  rgba(124,58,237, 0.28) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 52% at 86% 78%,  rgba(167,139,250,0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 62% 46% at 50% -5%,  rgba(139,92,246, 0.20) 0%, transparent 62%),
+    radial-gradient(ellipse 40% 40% at 90% 14%,  rgba(67,56,202,  0.15) 0%, transparent 56%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(255,255,255,0.58) 0%, transparent 70%);
+}
+.dark [data-channel="sound"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 12% 88%,  rgba(167,139,250,0.42) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 52% at 86% 78%,  rgba(124,58,237, 0.35) 0%, transparent 65%),
+    radial-gradient(ellipse 62% 46% at 50% -5%,  rgba(196,181,253,0.25) 0%, transparent 62%),
+    radial-gradient(ellipse 40% 40% at 90% 14%,  rgba(67,56,202,  0.32) 0%, transparent 56%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(0,0,0,0.28) 0%, transparent 70%);
+}
+
+/* ── Create channel — production drop-in from Claude Design (2026-05-11) ──
+   Source files: backgrounds.create.patch.css + ChannelBg.create.patch.jsx +
+                 backgrounds.create.HANDOFF.md
+   Applied verbatim per HANDOFF.md "100% reproducible spec" requirement.
+
+   Layer stack (顺序固定):
+     1. .bg-base   — solid --create-bg
+     2. .bg-mesh   — corner vignettes + ground fog + center spotlight (4 layer)
+     3. .bg-dither — REQUIRED noise overlay,kills 8-bit sRGB banding
+     4. cone       — SVG-mask trapezoid + feGaussianBlur (inline JSX, NOT clip-path)
+     5. fog-noise  — turbulence tile masked to fog band (inline JSX)
+     6. .bg-grain  — existing global grain
+     7. children
+
+   See HANDOFF.md for the checklist and design rationale.
+   Layers 4 + 5 implemented as inline-styled JSX in index.jsx (gated by
+   channel === 'create' && uses `dark` boolean state).
+
+   16 CSS vars (Light + Dark) — values from Claude Design Tuner verbatim. */
+
+[data-channel="create"] {
+  /* v4: orriso.com 参考图氛围方向 — 克制的 subtle atmosphere,
+     spotlight + cone 都接近不可见,边角微暗,整体均匀质感 */
+  --create-bg:                     #c7c7c7;
+  --create-corner-vignette-alpha:  0.35;               /* 0.30 → 0.35 边角微暗 */
+  --create-corner-color:           60, 70, 80;
+  --create-spotlight-y:            60%;
+  --create-spotlight-w:            150%;               /* 102 → 150 扩大漫射范围 */
+  --create-spotlight-h:            50%;                /* 80 → 50 收紧不压底,给 ground 让位 */
+  --create-spotlight-alpha:        0.40;               /* 1.00 → 0.40 克制不抢眼 */
+  --create-spotlight-color:        218, 218, 218;      /* #dadada 浅灰,不用纯白 */
+  --create-top-light-y:            0%;
+  --create-top-light-h:            41%;
+  --create-top-light-top-w:        21%;
+  --create-top-light-bottom-w:     60%;
+  --create-top-light-alpha:        0.25;               /* 0.50 → 0.25 氛围式 */
+  --create-top-light-blur:         9;                  /* 3.5 → 9 边缘融化 */
+  --create-top-light-color:        255, 255, 255;
+  --create-fog-start:              50%;                /* 59 → 50: 地面带从屏幕一半开始,horizon 氛围 */
+  --create-fog-end-y:              100%;
+  --create-fog-end-alpha:          0.70;               /* 0.50 → 0.70: 地面更深 */
+  --create-fog-color:              80, 88, 95;
+  --create-fog-noise-amount:       0.15;
+  --create-fog-noise-scale:        2.55;
+  --create-grain-opacity:          0;     /* Hidden — .bg-dither is the only dither layer per patch HANDOFF */
+}
+.dark [data-channel="create"] {
+  /* v4: teal → blue-shifted desaturated。降色彩纯度,色相由 teal/cyan 偏向纯蓝。
+     原 (30,63,72) cyan-teal → (35,52,85) 蓝色主导;G 降 11、B 升 13、R 微提
+     2 减饱和。视觉上更冷静、不那么"霓虹蓝绿"。 */
+  --create-bg:                     #16181c;             /* #14181e → #16181c: 减蓝,接近中性深灰 */
+  --create-corner-vignette-alpha:  0.30;
+  --create-corner-color:           60, 70, 80;
+  --create-spotlight-y:            60%;
+  --create-spotlight-w:            150%;
+  --create-spotlight-h:            102.5%;
+  --create-spotlight-alpha:        1.00;
+  --create-spotlight-color:        50, 56, 64;         /* (42,54,72) → (50,56,64): R-B 极差 30→14 大幅去饱和,清冷月光感 */
+  --create-top-light-y:            0%;
+  --create-top-light-h:            91%;                /* 41 + 50 = 91% */
+  --create-top-light-top-w:        21%;
+  --create-top-light-bottom-w:     60%;
+  --create-top-light-alpha:        0.80;               /* 1.00 → 0.80: 整体降浓度,避免顶部色相堆积 */
+  --create-top-light-blur:         12;                  /* 3.5 → 12: feather 50px → ~173px,边缘融入更彻底 */
+  --create-top-light-color:        32, 38, 46;         /* (28,38,52) → (32,38,46): R-B 24→14 同步去饱和 */
+  --create-fog-start:              59%;
+  --create-fog-end-y:              100%;
+  --create-fog-end-alpha:          0.39;
+  --create-fog-color:              80, 88, 95;
+  --create-fog-noise-amount:       0.15;
+  --create-fog-noise-scale:        2.55;
+  --create-grain-opacity:          0;     /* Hidden — same reason as Light */
+}
+
+[data-channel="create"] > .bg-base   { background: var(--create-bg); }
+[data-channel="create"] > .bg-grain  { opacity: var(--create-grain-opacity); }
+
+/* Banding-killer dither — full-mesh noise over every gradient layer.
+   This is REQUIRED, not optional. CSS radial-gradient banding on 8-bit sRGB
+   cannot be fixed by stop-tuning or oklch alone; only a noise layer breaks
+   the per-channel quantisation. Keep opacity low enough to be invisible. */
+[data-channel="create"] > .bg-dither {
+  position: absolute; inset: 0; pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2' seed='7' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 180px 180px;
+  background-repeat: repeat;
+}
+.dark [data-channel="create"] > .bg-dither { opacity: 0.05; }
+
+/* Dark mode: spotlight 由 <CreateSpotlightCanvas> 接管 (Canvas 2D + Floyd-
+   Steinberg dither,完全消除 banding)。.bg-mesh 只渲染 corners + fog,
+   去掉 spotlight gradient 避免双重叠加 */
+.dark [data-channel="create"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 50% 50% at 0% 0%,
+      rgba(var(--create-corner-color), var(--create-corner-vignette-alpha)) 0%,
+      transparent 60%),
+    radial-gradient(ellipse 50% 50% at 0% 100%,
+      rgba(var(--create-corner-color), calc(var(--create-corner-vignette-alpha) * 0.85)) 0%,
+      transparent 60%),
+    linear-gradient(to bottom,
+      transparent var(--create-fog-start),
+      rgba(var(--create-fog-color), calc(var(--create-fog-end-alpha) * 0.20))
+        calc(var(--create-fog-start) + (var(--create-fog-end-y) - var(--create-fog-start)) * 0.55),
+      rgba(var(--create-fog-color), calc(var(--create-fog-end-alpha) * 0.55))
+        calc(var(--create-fog-start) + (var(--create-fog-end-y) - var(--create-fog-start)) * 0.80),
+      rgba(var(--create-fog-color), var(--create-fog-end-alpha)) var(--create-fog-end-y));
+  /* NO spotlight radial-gradient — Canvas does it */
+}
+
+/* mesh — corner vignettes + fog gradient + center spotlight only.
+   top-light cone & fog noise live in JSX (see ChannelBg.create.patch.jsx). */
+[data-channel="create"] > .bg-mesh,
+.dark [data-channel="create"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 50% 50% at 0% 0%,
+      rgba(var(--create-corner-color), var(--create-corner-vignette-alpha)) 0%,
+      transparent 60%),
+    radial-gradient(ellipse 50% 50% at 0% 100%,
+      rgba(var(--create-corner-color), calc(var(--create-corner-vignette-alpha) * 0.85)) 0%,
+      transparent 60%),
+    linear-gradient(to bottom,
+      transparent var(--create-fog-start),
+      rgba(var(--create-fog-color), calc(var(--create-fog-end-alpha) * 0.20))
+        calc(var(--create-fog-start) + (var(--create-fog-end-y) - var(--create-fog-start)) * 0.55),
+      rgba(var(--create-fog-color), calc(var(--create-fog-end-alpha) * 0.55))
+        calc(var(--create-fog-start) + (var(--create-fog-end-y) - var(--create-fog-start)) * 0.80),
+      rgba(var(--create-fog-color), var(--create-fog-end-alpha)) var(--create-fog-end-y)),
+    radial-gradient(
+      ellipse var(--create-spotlight-w) var(--create-spotlight-h)
+      at 50% var(--create-spotlight-y),
+      rgba(var(--create-spotlight-color), var(--create-spotlight-alpha)) 0%,
+      rgba(var(--create-spotlight-color), calc(var(--create-spotlight-alpha) * 0.55)) 30%,
+      rgba(var(--create-spotlight-color), calc(var(--create-spotlight-alpha) * 0.22)) 55%,
+      transparent 80%);
+}
+
+/* ── Live · pink-50 / pink-950 ───────────────────────────────────────── */
+[data-channel="live"] > .bg-base { background: #fdf2f8; }
+.dark [data-channel="live"] > .bg-base { background: #500724; }
+
+[data-channel="live"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 13% 87%,  rgba(236,72,153, 0.28) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 50% at 87% 77%,  rgba(244,114,182,0.22) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 46% at 50% -5%,  rgba(249,168,212,0.20) 0%, transparent 62%),
+    radial-gradient(ellipse 40% 38% at 90% 13%,  rgba(190,24,93,  0.16) 0%, transparent 56%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(255,255,255,0.58) 0%, transparent 70%);
+}
+.dark [data-channel="live"] > .bg-mesh {
+  background:
+    radial-gradient(ellipse 70% 60% at 13% 87%,  rgba(236,72,153, 0.42) 0%, transparent 68%),
+    radial-gradient(ellipse 55% 50% at 87% 77%,  rgba(244,114,182,0.35) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 46% at 50% -5%,  rgba(249,168,212,0.25) 0%, transparent 62%),
+    radial-gradient(ellipse 40% 38% at 90% 13%,  rgba(190,24,93,  0.32) 0%, transparent 56%),
+    radial-gradient(ellipse 52% 58% at 50% 50%,  rgba(0,0,0,0.28) 0%, transparent 70%);
+}
+
+/* ── Breathe Animation ────────────────────────────────────────────────── */
+@keyframes bgBreathe {
+  0%   { transform: scale(1)    translate(0,     0); }
+  33%  { transform: scale(1.02) translate(-0.5%, 0.4%); }
+  66%  { transform: scale(1.03) translate( 0.4%, -0.4%); }
+  100% { transform: scale(1.02) translate(-0.3%,  0.5%); }
+}
+
+/* ── Spline watermark/toolbar hide ────────────────────────────────────
+ * @splinetool/react-spline injects its own bottom-right toolbar (logo +
+ * fullscreen control). We render our own UI over the 3D scene, so the
+ * third-party chrome is purely visual noise. Hide it globally. */
+[class*="styles-module__toolbar"],
+[class*="styles-module__toolbarContainer"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

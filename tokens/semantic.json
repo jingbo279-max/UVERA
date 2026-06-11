@@ -1,0 +1,45 @@
+{
+  "color/label": {
+    "light": "#1c1917",
+    "dark": "#fafaf9"
+  },
+  "color/label/secondary": {
+    "light": "#78716c",
+    "dark": "#a8a29e"
+  },
+  "color/label/tertiary": {
+    "light": "#a8a29e",
+    "dark": "#78716c"
+  },
+  "color/label/quaternary": {
+    "light": "#d6d3d1",
+    "dark": "#44403c"
+  },
+  "color/background": {
+    "light": "#fafaf9",
+    "dark": "#1c1917"
+  },
+  "color/background/secondary": {
+    "light": "#f5f5f4",
+    "dark": "#292524"
+  },
+  "color/background/tertiary": {
+    "light": "#e7e5e4",
+    "dark": "#44403c"
+  },
+  "color/separator": {
+    "light": "rgba(0,0,0,0.08)",
+    "dark": "rgba(255,255,255,0.08)"
+  },
+  "color/accent": {
+    "light": "#7c3aed",
+    "dark": "#a78bfa"
+  },
+  "color/accent/bg": {
+    "light": "#f5f3ff",
+    "dark": "rgba(124,58,237,0.15)"
+  },
+  "color/destructive": {
+    "light": "#ef4444"
+  }
+}

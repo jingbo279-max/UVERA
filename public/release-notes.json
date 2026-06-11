@@ -1,0 +1,149 @@
+{
+  "$comment": "Curated release notes shown to users via VersionUpdater toast and Settings → What's New. Newest entry first. The first entry is mirrored into version.json at build time so the in-app prompt knows what changed when nudging users to refresh.",
+  "releases": [
+    {
+      "version": "1.3.0",
+      "date": "2026-06-06",
+      "title": "Free Mode AI 出图重做:多模态 + 画质/比例/多参考图,外加一批稳定性修复",
+      "highlights": [
+        "Free Mode 出图重做 — 输入图片+文字现在会忠实多模态生成一张新图,不再被系统套成铅笔'角色故事板'(本次最大改动)",
+        "出图新增画质选择:经济 / 标准 / 高清,按档位计费 3→6 credit(最高 2×),面板实时显示本次扣费",
+        "出图新增比例选择:横版 / 方形 / 竖版,以及'自动'—— 自动跟随你单张参考图的比例",
+        "支持多张参考图(最多 4 张)合成出图:上传 / Pick Actor / 素材库均可多选,逐个移除",
+        "短剧创作:AI 编剧偶发的'空白卡死 / 无限转圈'已根治(移除旧 memfire 路径 + 30s 超时兜底)",
+        "封面体验:可从视频选帧设封面;新视频自动用时长 10% 处的帧(跳过纯黑首帧);修复选帧器黑屏 + 滑块卡死",
+        "导航与移动端:整页刷新后返回不再误回 Discover;修复 iOS 输入聚焦放大 / 触摸目标过小 / 搜索栏关闭图标",
+        "沉浸式播放:修复 Safari 横版尺寸抖动、封面'清晰→模糊→清晰'闪烁、letterbox 漏出相邻视频",
+        "Seedance 2.0 Fast 不支持 1080p — 自动按模型钳到支持档并按生效档位计费"
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "date": "2026-05-25",
+      "title": "短剧付费体系 + 多分段叙事 + 角色设定图 + 全新错误体验",
+      "highlights": [
+        "Drama paywall: series can now have first N free episodes + per-episode unlock with U-Coins + whole-series buyout via Stripe. Author and admin both see real-time earnings + can confirm settlements",
+        "New U-Coins wallet at /wallet — 6 top-up packs ($0.99 ~ $49.99, $0.99 首充翻倍 200 → 400 U-Coins), live balance + transaction history, Stripe-only payment with success-redirect polling",
+        "Subscribers (Starter / Creator / Studio) automatically gain '短剧会员' status — free access to any series where ops marked '会员免费'. Admin can adjust which tiers count via system_settings",
+        "Multi-segment story mode — pick 1-5 segments in Quick Mode, render each independently then merge with ffmpeg in-browser. Lets you build longer stories without one giant render",
+        "CHARACTER IDENTITY BOARD — a second polished image is now generated alongside the storyboard, showing your protagonist's face / costume / proportions in the chosen art style with inspiration from your Actor photo",
+        "Free Mode: video genre tag picker (Vlog / MV / Short Drama / Trailer / Art Film / Product) — your works now show up in Discover's genre filters",
+        "Free Mode: + 4 new aspect ratios (21:9 ultrawide, 9:21 vertical ultra, 4:3 retro, 3:4 portrait) on top of the original 16:9 / 9:16 / 1:1",
+        "Free Mode: asset certification button — upload real-person reference photos to BytePlus Private Asset Library to bypass the safety filter",
+        "Free Mode: per-segment save indicator + manual retry — each segment card shows 已入库 / 保存中 / 重试保存 so you always know whether the work actually landed in Library",
+        "Library: drafts now sync across devices via Supabase — start on iPhone, continue on Mac. Multiple drafts (one per mode) shown side by side",
+        "Library: Works tab now has refresh button + Bulk delete mode. Private works can be deleted directly",
+        "Library: Free Mode works AND drafts both appear here (previously hidden)",
+        "Render confirm modal: price now updates live when you change resolution AND model (Standard model is 1.5× Fast by default)",
+        "Render station: failed segments show '重试' button right on the card — no more re-run from scratch when one Seedance call fails",
+        "All Seedance / upload / video-merge errors now show as friendly inline banners with one-click retry instead of blocking browser alert popups",
+        "Player consistency: every Stream video in Library / Series / Spark / Hero now uses the same UnifiedVideoPlayer (HLS lookahead prefetch, no more black box on non-Safari)",
+        "Sequel / Series detail page now shows ★首发 / ♥推荐 / 会员免费 pills + episode lock badges + price right on each episode card",
+        "Direct video download (no more blank tab) — Cloudflare Stream pre-processes the mp4 before triggering a real file download",
+        "Spark: TikTok-style 10-deep lookahead prefetch + ordering by recency × popularity + auto-exclude already-watched",
+        "iOS Safari fixes: stuck-after-5-swipes pause logic, unmuted-autoplay-after-swipe, video-frame-then-black resilience",
+        "Admin Dashboard: 5 new drama tabs — 剧集收益 (8 metric cards + daily trend chart + composition donut + Top 10 leaderboard), 剧集管理 (per-series price config + lifecycle), 分成结算 (monthly settlement engine + state transitions), 付费流水 (cross-table ledger + per-user LTV drawer), 投流 ROI (per-channel ad spend tracking + ROI multiplier)",
+        "Creator self-service: /creator/earnings page lists your settlements per month, confirm with one click, CSV export",
+        "ffmpeg.wasm resilience: unpkg fallback when R2 wasm is missing, plus ESM core fix for module-worker dynamic import",
+        "Style picker rewritten — 21 GPT-image-2-optimized styles organized in 5 categories, replacing the old random grab-bag",
+        "Story drafts auto-save also pings Supabase every 3s now — your in-progress work survives device switches, browser clears, and tab crashes"
+      ]
+    },
+    {
+      "version": "1.1.3",
+      "date": "2026-05-13",
+      "title": "Team chat, dev log, decision policy, and rename groundwork",
+      "highlights": [
+        "Admin Dashboard now has Team Chat — real-time three-way conversation between you, the dev team, and Claude as an AI participant. Tag @claude to query data, propose code, draft documentation",
+        "Daily Dev Log in the admin backend — every non-trivial activity day gets a log entry visible to all team members. Searchable history of what shipped and why",
+        "Help Center articles are now admin-managed with full markdown support — add or edit articles from the dashboard without redeploying",
+        "Profile reliability: switching accounts now properly clears the previous user's data instead of showing stale works and follower counts",
+        "Account switching no longer triggers JWT lock conflicts on rapid focus events",
+        "Foundation for v1.2 naming consolidation — backend dual-writes both legacy and new token/grant column names, so future frontend changes can roll out gradually without breaking existing integrations",
+        "Source attribution rename — the internal source_character_id field has been correctly renamed to source_actor_id throughout the codebase to match its actual semantics",
+        "Sequel flow no longer carries the legacy 'Continuation' label internally — UI and code now use Sequel / Branch / Recast consistently per product spec"
+      ]
+    },
+    {
+      "version": "1.1.2",
+      "date": "2026-05-12",
+      "title": "Engagement counts, privacy controls, and admin upgrades",
+      "highlights": [
+        "Like and Save counts now actually update — your engagements register on every work and show real numbers on the card and detail view",
+        "New Save button in the video detail player — save works to revisit later, alongside Like",
+        "Privacy toggle on your own works — flip any of your published works between Public (visible everywhere) and Private (hidden from Discover) right from the card hover or detail view",
+        "Recast button no longer skips the script step — pick a new character and style, then review and edit the AI-generated story before rendering",
+        "Recast button is now gated on the original creator's 'Allow Recast' setting — respect creators who opted out",
+        "Wallet page shows a complete activity history — every video, image, or script generation with its token cost, filterable by status and paginated",
+        "Help Center now has real content — admins curate articles in the dashboard, with full markdown support (headings, lists, links, code blocks, tables)",
+        "Stripe pricing adjusted: video generation costs 4 / 6 / 12 tokens per second at 480p / 720p / 1080p (was 2 / 3 / 7)",
+        "Admin: click any order in Payments & Orders to see the full Stripe payment detail — card brand, last 4 digits, refund history, receipt URL, raw payment intent state",
+        "Admin: refund / void / restore actions also available inline in the new order detail drawer",
+        "Admin: Help Articles tab for curating the user Help Center — add / edit / publish / hide articles per category"
+      ]
+    },
+    {
+      "version": "1.1.1",
+      "date": "2026-05-11",
+      "title": "Lite top-up, profile upgrades, and reliability fixes",
+      "highlights": [
+        "New Lite plan: $3.99 one-time top-up for 100 tokens — no subscription, no auto-renewal, buy whenever you need a quick boost",
+        "Saved tab on your profile — bookmark works you want to revisit, separate from the Liked tab",
+        "Click your Followers or Following count to see exactly who they are — unfollow or follow back right from the list",
+        "Following tab on Discover now actually shows works from the creators you follow (was previously empty)",
+        "Recast flow now pauses at the script step so you can rewrite the story before rendering — no more being railroaded to auto-generation",
+        "Fixed video playback crash when opening details from My Works, Search Results, or your profile",
+        "Email receipts for every payment, refund, and support credit — sent via our verified send.uvera.ai domain",
+        "Self-healing AI model resilience — if our upstream provider rotates models, the app silently falls back instead of erroring",
+        "Live follower / following counts that actually update when you follow or unfollow someone",
+        "Admin: refund any Stripe order with one click, with usage-based abuse signals to prevent 'used most of it then refunded' loss",
+        "Admin: rebuilt Payments view with search, status filters, Stripe Dashboard quick-links, and soft-delete (void) instead of hard delete",
+        "Admin: grant or adjust user tokens from any user row with full audit trail"
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "date": "2026-05-09",
+      "title": "Admin tools, compliance, and reliability",
+      "highlights": [
+        "Brand-new content report button on Discover — flag inappropriate or copyright-violating content with one click",
+        "Cookie notice for transparency — we use essential cookies only, never marketing trackers",
+        "Series management overhaul — drag to reorder episodes, edit published series, unpublish from Discover anytime",
+        "Live admin user management — search, ban, role assignment all in one place",
+        "Detailed admin generation logs — every AI call captured with full params and cost, plus CSV export",
+        "Many playback fixes — user-uploaded videos now play correctly across Discover, immerse mode, and series detail pages",
+        "Daily +6 tokens claim now reliably persists across sessions",
+        "Faster Create page — landing screen no longer waits on background data"
+      ]
+    },
+    {
+      "version": "1.0.7",
+      "date": "2026-05-08",
+      "title": "Series + uploads + content management",
+      "highlights": [
+        "New 'Create a Series' mode — multi-episode stories with a recurring cast, save drafts, publish to Discover",
+        "New 'Upload Video' mode — submit your own video (up to 500 MB) for review, published on approval",
+        "All uploads reviewed within 48 hours — track status anytime from Library → My Uploads",
+        "Library now has Series and My Uploads tabs so you can manage all your work in one place",
+        "Series detail page with full episode list — viewers can browse every episode, not just the first",
+        "Reorder, edit, and unpublish your published series at any time without losing your work"
+      ]
+    },
+    {
+      "version": "1.0.5",
+      "date": "2026-05-06",
+      "title": "GA-ready: payments, polish, and personalization",
+      "highlights": [
+        "Stripe subscriptions are live — pick a plan from /subscription and pay with card",
+        "Daily +6 tokens for everyone — claim from Wallet once per day",
+        "Create flow rebuilt to match the rest of the app's visual language",
+        "AI script now matches your input language (write Chinese / Japanese / English; get scripts in the same)",
+        "Style picker replaced 9-page pagination with category filters (Animation / Traditional / Avant-garde / Modern)",
+        "Video render now shows live elapsed time + progress bar instead of a frozen-looking spinner",
+        "Stricter per-row authorization on user data (RLS) — your characters and orders are now actually private",
+        "Legal docs available — Terms, Privacy, Content License linked from Subscription and Settings",
+        "Creative Canvas beta-access card on the Create page — pro tools coming, request early access"
+      ]
+    }
+  ]
+}

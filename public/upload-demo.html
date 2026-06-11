@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自动颜色提取 - 上传演示</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen py-12">
+  <div class="max-w-4xl mx-auto px-4">
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold text-gray-900 mb-4">自动颜色提取演示</h1>
+      <p class="text-gray-600">上传封面图，系统自动提取主色调并匹配 Tailwind 颜色</p>
+    </div>
+
+    <!-- 上传区域 -->
+    <div class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+      <h2 class="text-2xl font-semibold mb-6">上传封面图</h2>
+
+      <div class="mb-6">
+        <input
+          type="file"
+          id="coverInput"
+          accept="image/*"
+          class="hidden"
+        />
+        <label
+          for="coverInput"
+          class="block border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-violet-400 transition-colors"
+        >
+          <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <p class="text-gray-600 text-lg">点击或拖拽图片到这里</p>
+          <p class="text-gray-400 text-sm mt-2">支持 JPG, PNG, WebP 格式</p>
+        </label>
+      </div>
+
+      <div id="status" class="hidden mb-6">
+        <div class="flex items-center justify-center gap-3 text-violet-600">
+          <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="font-medium">正在分析封面颜色...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 结果展示 -->
+    <div id="results" class="hidden">
+      <!-- 预览卡片 -->
+      <div class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+        <h2 class="text-2xl font-semibold mb-6">效果预览</h2>
+
+        <div id="previewCard" class="rounded-2xl p-2">
+          <div class="relative rounded-xl overflow-hidden shadow-lg">
+            <div class="relative overflow-hidden" style="aspect-ratio: 9/16">
+              <img id="previewImage" src="" alt="预览" class="absolute inset-0 w-full h-full object-cover" />
+
+              <div class="absolute top-3 left-3">
+                <div id="badgeIcon" class="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg">
+                  <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path>
+                  </svg>
+                </div>
+              </div>
+
+              <div class="absolute top-3 right-3">
+                <span class="px-2.5 py-1 rounded-lg bg-black/20 backdrop-blur-sm text-xs font-medium text-white">
+                  Clips
+                </span>
+              </div>
+            </div>
+
+            <div class="p-4 bg-gradient-to-t from-black/50 to-transparent text-white">
+              <h4 class="font-medium text-sm mb-1">示例标题</h4>
+              <p class="text-xs opacity-90">示例艺术家</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 颜色信息 -->
+      <div class="bg-white rounded-2xl shadow-lg p-8">
+        <h2 class="text-2xl font-semibold mb-6">提取的颜色信息</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- 颜色色块 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-3">Tailwind 颜色</label>
+            <div class="flex items-center gap-4">
+              <div id="colorSwatch" class="w-24 h-24 rounded-2xl shadow-lg"></div>
+              <div>
+                <p id="colorName" class="text-2xl font-bold text-gray-900 mb-1"></p>
+                <p id="colorHex" class="text-sm text-gray-500 font-mono"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 原始颜色 -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-3">提取的主色调</label>
+            <div class="flex items-center gap-4">
+              <div id="originalSwatch" class="w-24 h-24 rounded-2xl shadow-lg"></div>
+              <div>
+                <p id="originalRgb" class="text-lg font-semibold text-gray-900 mb-1"></p>
+                <p class="text-sm text-gray-500">原始 RGB 值</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 代码输出 -->
+        <div class="mt-8">
+          <label class="block text-sm font-medium text-gray-700 mb-3">生成的代码</label>
+          <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+            <pre id="codeOutput" class="text-sm text-gray-100 font-mono"></pre>
+          </div>
+          <button
+            id="copyBtn"
+            class="mt-3 px-6 py-2 bg-violet-600 text-white rounded-lg font-medium hover:bg-violet-700 transition-colors"
+          >
+            复制代码
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Tailwind 颜色定义
+    const TAILWIND_COLORS_100 = {
+      'slate-100': { r: 241, g: 245, b: 249, hex: '#F1F5F9' },
+      'gray-100': { r: 243, g: 244, b: 246, hex: '#F3F4F6' },
+      'red-100': { r: 254, g: 226, b: 226, hex: '#FEE2E2' },
+      'orange-100': { r: 255, g: 237, b: 213, hex: '#FFEDD5' },
+      'amber-100': { r: 254, g: 243, b: 199, hex: '#FEF3C7' },
+      'yellow-100': { r: 254, g: 249, b: 195, hex: '#FEF9C3' },
+      'lime-100': { r: 236, g: 252, b: 203, hex: '#ECFCCB' },
+      'green-100': { r: 220, g: 252, b: 231, hex: '#DCFCE7' },
+      'emerald-100': { r: 209, g: 250, b: 229, hex: '#D1FAE5' },
+      'teal-100': { r: 204, g: 251, b: 241, hex: '#CCFBF1' },
+      'cyan-100': { r: 207, g: 250, b: 254, hex: '#CFFAFE' },
+      'sky-100': { r: 224, g: 242, b: 254, hex: '#E0F2FE' },
+      'blue-100': { r: 219, g: 234, b: 254, hex: '#DBEAFE' },
+      'indigo-100': { r: 224, g: 231, b: 255, hex: '#E0E7FF' },
+      'violet-100': { r: 237, g: 233, b: 254, hex: '#EDE9FE' },
+      'purple-100': { r: 243, g: 232, b: 255, hex: '#F3E8FF' },
+      'fuchsia-100': { r: 250, g: 232, b: 255, hex: '#FAE8FF' },
+      'pink-100': { r: 252, g: 231, b: 243, hex: '#FCE7F3' },
+      'rose-100': { r: 255, g: 228, b: 230, hex: '#FFE4E6' },
+    };
+
+    const BADGE_COLORS = {
+      'slate': '#94A3B8', 'gray': '#9CA3AF', 'red': '#F87171',
+      'orange': '#FB923C', 'amber': '#FCD34D', 'yellow': '#FACC15',
+      'lime': '#A3E635', 'green': '#4ADE80', 'emerald': '#34D399',
+      'teal': '#2DD4BF', 'cyan': '#22D3EE', 'sky': '#38BDF8',
+      'blue': '#60A5FA', 'indigo': '#818CF8', 'violet': '#A78BFA',
+      'purple': '#A78BFA', 'fuchsia': '#E879F9', 'pink': '#F472B6',
+      'rose': '#FB7185',
+    };
+
+    function colorDistance(c1, c2) {
+      const rDiff = c1.r - c2.r;
+      const gDiff = c1.g - c2.g;
+      const bDiff = c1.b - c2.b;
+      return Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
+    }
+
+    function findClosestColor(rgb) {
+      let closest = 'gray-100';
+      let minDist = Infinity;
+
+      for (const [name, color] of Object.entries(TAILWIND_COLORS_100)) {
+        const dist = colorDistance(rgb, color);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = name;
+        }
+      }
+
+      return closest;
+    }
+
+    function extractColor(img) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const maxSize = 100;
+      const scale = Math.min(maxSize / img.width, maxSize / img.height);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      let r = 0, g = 0, b = 0, count = 0;
+
+      for (let i = 0; i < data.length; i += 16) {
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+        count++;
+      }
+
+      return {
+        r: Math.round(r / count),
+        g: Math.round(g / count),
+        b: Math.round(b / count)
+      };
+    }
+
+    // 文件上传处理
+    document.getElementById('coverInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      document.getElementById('status').classList.remove('hidden');
+      document.getElementById('results').classList.add('hidden');
+
+      const img = new Image();
+      img.onload = () => {
+        // 提取颜色
+        const avgColor = extractColor(img);
+        const colorName = findClosestColor(avgColor);
+        const baseColor = colorName.replace('-100', '');
+        const tailwindColor = TAILWIND_COLORS_100[colorName];
+        const badgeHex = BADGE_COLORS[baseColor];
+
+        // 更新预览
+        document.getElementById('previewImage').src = img.src;
+        document.getElementById('previewCard').className = `rounded-2xl bg-${colorName} p-2`;
+        document.getElementById('badgeIcon').style.backgroundColor = badgeHex;
+
+        // 更新颜色信息
+        document.getElementById('colorSwatch').style.backgroundColor = tailwindColor.hex;
+        document.getElementById('colorName').textContent = colorName;
+        document.getElementById('colorHex').textContent = tailwindColor.hex;
+
+        document.getElementById('originalSwatch').style.backgroundColor =
+          `rgb(${avgColor.r}, ${avgColor.g}, ${avgColor.b})`;
+        document.getElementById('originalRgb').textContent =
+          `RGB(${avgColor.r}, ${avgColor.g}, ${avgColor.b})`;
+
+        // 生成代码
+        const code = `{
+  color: 'from-${baseColor}-100 to-${baseColor}-300',
+  badgeHex: '${badgeHex}',
+  bgColor: 'bg-${colorName}',
+}`;
+        document.getElementById('codeOutput').textContent = code;
+
+        // 显示结果
+        document.getElementById('status').classList.add('hidden');
+        document.getElementById('results').classList.remove('hidden');
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+
+    // 复制代码
+    document.getElementById('copyBtn').addEventListener('click', () => {
+      const code = document.getElementById('codeOutput').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✓ 已复制!';
+        btn.classList.add('bg-green-600');
+        btn.classList.remove('bg-violet-600');
+        setTimeout(() => {
+          btn.textContent = '复制代码';
+          btn.classList.remove('bg-green-600');
+          btn.classList.add('bg-violet-600');
+        }, 2000);
+      });
+    });
+
+    // 拖拽上传
+    const uploadArea = document.querySelector('label[for="coverInput"]');
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('border-violet-400', 'bg-violet-50');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('border-violet-400', 'bg-violet-50');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('border-violet-400', 'bg-violet-50');
+
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const input = document.getElementById('coverInput');
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        input.files = dataTransfer.files;
+        input.dispatchEvent(new Event('change'));
+      }
+    });
+  </script>
+</body>
+</html>

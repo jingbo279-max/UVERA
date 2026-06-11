@@ -1,0 +1,20 @@
+{
+  "color/channel/home": {
+    "light": "#78716c"
+  },
+  "color/channel/clips": {
+    "light": "#f59e0b"
+  },
+  "color/channel/story": {
+    "light": "#64748b"
+  },
+  "color/channel/sound": {
+    "light": "#7c3aed"
+  },
+  "color/channel/create": {
+    "light": "#06b6d4"
+  },
+  "color/channel/live": {
+    "light": "#ec4899"
+  }
+}

@@ -1,0 +1,233 @@
+{
+  "_meta": {
+    "description": "Figma node → React component mapping (local replacement for Code Connect, which requires Enterprise plan)",
+    "figmaFile": "lKatfXIfgAii0NHTXenM71",
+    "figmaUrl": "https://www.figma.com/design/lKatfXIfgAii0NHTXenM71/longvv-Design",
+    "generatedAt": "2026-03-29",
+    "framework": "React"
+  },
+  "primitives": [
+    {
+      "figmaNodeId": "50:305",
+      "figmaName": "Liquid Glass - Regular - Small",
+      "figmaPage": "Materials",
+      "component": "GlassSurface",
+      "source": "src/design-system/primitives/GlassSurface.jsx",
+      "props": {
+        "variant": ["clear", "prominent", "dark", "tinted", "morphing"],
+        "className": "string"
+      },
+      "cssClasses": ["liquid-glass", "liquid-glass-clear", "liquid-glass-dark", "liquid-glass-tinted", "liquid-glass-prominent", "liquid-glass-morphing"]
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "Button - Symbol",
+      "figmaPage": "Components（组件库）",
+      "component": "GlassButton",
+      "source": "src/design-system/primitives/GlassButton.jsx",
+      "props": {
+        "size": ["mini", "small", "regular", "large", "xl"],
+        "variant": ["clear", "prominent", "tinted"],
+        "active": "boolean"
+      },
+      "notes": "Maps to visionOS Button - Symbol. Figma node TBD after component is copied from Apple template."
+    },
+    {
+      "figmaNodeId": "28:18",
+      "figmaName": "_Controls - BG - iPhone (Toggle)",
+      "figmaPage": "Components（组件库）",
+      "component": "Toggle",
+      "source": "src/design-system/primitives/Toggle.jsx",
+      "props": {
+        "on": "boolean",
+        "size": ["regular", "small"],
+        "disabled": "boolean"
+      },
+      "cssClasses": ["glass-ctrl-on", "glass-ctrl-off"]
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "Text Field",
+      "figmaPage": "Components（组件库）",
+      "component": "TextField",
+      "source": "src/design-system/primitives/TextField.jsx",
+      "props": {
+        "label": "string",
+        "multiline": "boolean",
+        "error": "string"
+      },
+      "notes": "Figma node TBD after component is copied from Apple iOS template."
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "Tooltip",
+      "figmaPage": "Components（组件库）",
+      "component": "Tooltip",
+      "source": "src/design-system/primitives/Tooltip.jsx",
+      "props": {
+        "content": "string",
+        "position": ["top", "bottom"],
+        "delay": "number"
+      },
+      "cssClasses": ["liquid-glass-clear"]
+    }
+  ],
+  "composites": [
+    {
+      "figmaNodeId": null,
+      "figmaName": "Navigation Bar",
+      "figmaPage": "Components（组件库）",
+      "component": "NavigationBar",
+      "source": "src/design-system/composites/NavigationBar.jsx",
+      "notes": "Top navigation bar with search, theme toggle, mute, upgrade CTA."
+    },
+    {
+      "figmaNodeId": "230:178",
+      "figmaName": "TabButton",
+      "figmaPage": "longvv Components",
+      "component": "TabBar",
+      "source": "src/design-system/composites/TabBar.jsx",
+      "variants": { "State": ["Selected", "Default", "Hover"] },
+      "notes": "Left dock-style navigation with channel icons and glass pill. Component Set with State variants."
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "Segmented Control",
+      "figmaPage": "Components（组件库）",
+      "component": "SegmentedControl",
+      "source": "src/design-system/composites/SegmentedControl.jsx",
+      "props": {
+        "segments": "Array<{value, label}>",
+        "value": "string"
+      },
+      "cssClasses": ["btn-segment", "btn-segment-active"]
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "Search Field",
+      "figmaPage": "Components（组件库）",
+      "component": "SearchField",
+      "source": "src/design-system/composites/SearchField.jsx",
+      "props": {
+        "categories": "string[]",
+        "overDark": "boolean",
+        "variant": ["clear", "prominent"]
+      }
+    },
+    {
+      "figmaNodeId": null,
+      "figmaName": "Menu",
+      "figmaPage": "Components（组件库）",
+      "component": "Menu",
+      "source": "src/design-system/composites/Menu.jsx",
+      "props": {
+        "layout": ["pill", "list"],
+        "overDark": "boolean",
+        "variant": ["clear", "prominent"]
+      }
+    }
+  ],
+  "pages": [
+    {
+      "figmaNodeId": "220:171",
+      "figmaName": "Explore — Desktop 1440",
+      "figmaPage": "Explore",
+      "notes": "Full Explore page skeleton (1440×2400) with Hero, Header, Sidebar, FilterChips, MasonryGrid."
+    }
+  ],
+  "componentSets": [
+    {
+      "figmaNodeId": "139:14646",
+      "figmaName": "Tab Bar",
+      "figmaPage": "Tab Bars (visionOS 26)",
+      "codeComponent": "TabBar",
+      "source": "src/design-system/composites/TabBar.jsx",
+      "variants": { "Tabs": "2-7", "Selected": "1-7", "Expanded": ["True", "False"] },
+      "notes": "Apple visionOS 26 Tab Bar. Instance on Explore page: Tabs=6, Selected=1, Expanded=False"
+    },
+    {
+      "figmaNodeId": "139:14636",
+      "figmaName": "_Tab Button - Collapsed - Unselected",
+      "figmaPage": "Tab Bars (visionOS 26)",
+      "codeComponent": "TabBar (button)",
+      "source": "src/design-system/composites/TabBar.jsx",
+      "variants": { "State": ["Idle", "Hover"] }
+    },
+    {
+      "figmaNodeId": "139:14641",
+      "figmaName": "_Tab Button - Collapsed - Selected",
+      "figmaPage": "Tab Bars (visionOS 26)",
+      "codeComponent": "TabBar (button active)",
+      "source": "src/design-system/composites/TabBar.jsx",
+      "variants": { "State": ["Idle", "Hover"] }
+    },
+    {
+      "figmaNodeId": "139:16192",
+      "figmaName": "Sidebar Item",
+      "figmaPage": "Sidebars (visionOS 26)",
+      "codeComponent": "TabBar (profile menu items)",
+      "source": "src/design-system/composites/TabBar.jsx",
+      "variants": { "State": ["Selected", "Hover", "Idle"], "Accessory": ["Bitmap Circle", "Bitmap Rounded Rect", "Symbol in circle", "Symbol"] },
+      "notes": "Used for Profile pill expanded menu items (YOU, My Assets, Studio, Settings, Help, Log Out)"
+    }
+  ],
+  "variableCollection": {
+    "figmaId": "VariableCollectionId:226:171",
+    "name": "longvv/Design Tokens",
+    "modes": ["Light", "Dark"],
+    "variableCount": 37,
+    "mapping": {
+      "color/label": "--color-label",
+      "color/label-secondary": "--color-label-secondary",
+      "color/label-tertiary": "--color-label-tertiary",
+      "color/label-quaternary": "--color-label-quaternary",
+      "color/background": "--color-background",
+      "color/background-secondary": "--color-background-secondary",
+      "color/background-tertiary": "--color-background-tertiary",
+      "color/accent": "--color-accent",
+      "color/accent-bg": "--color-accent-bg",
+      "color/destructive": "--color-destructive",
+      "color/channel/home": "--color-channel-home",
+      "color/channel/clips": "--color-channel-clips",
+      "color/channel/story": "--color-channel-story",
+      "color/channel/sound": "--color-channel-sound",
+      "color/channel/create": "--color-channel-create",
+      "color/channel/live": "--color-channel-live",
+      "spacing/xs": "--spacing-xs",
+      "spacing/sm": "--spacing-sm",
+      "spacing/md": "--spacing-md",
+      "spacing/lg": "--spacing-lg",
+      "spacing/xl": "--spacing-xl",
+      "spacing/2xl": "--spacing-2xl",
+      "spacing/3xl": "--spacing-3xl",
+      "spacing/4xl": "--spacing-4xl",
+      "spacing/5xl": "--spacing-5xl",
+      "spacing/touch-target": "--spacing-touch-target",
+      "radius/sm": "--radius-sm",
+      "radius/md": "--radius-md",
+      "radius/lg": "--radius-lg",
+      "radius/xl": "--radius-xl",
+      "radius/2xl": "--radius-2xl",
+      "radius/pill": "--radius-pill",
+      "radius/glass": "--radius-glass"
+    }
+  },
+  "tokenCollections": {
+    "Primitives": "tokens/primitives.json",
+    "Semantic": "tokens/semantic.json",
+    "Channel": "tokens/channel.json",
+    "Typography": "tokens/typography.json",
+    "Spacing": "tokens/spacing.json",
+    "Radius": "tokens/radius.json",
+    "Glass": "tokens/glass.json"
+  },
+  "figmaCollections": {
+    "Primitives": "raw-stone-*, raw-violet-* (Light/Dark modes)",
+    "Semantic": "label, background, accent, separator, destructive (Light/Dark modes)",
+    "Channel": "channel-home, channel-clips, channel-story, channel-sound, channel-create, channel-live",
+    "Glass": "6 base variants × 5 parameters (bg, blur, saturate, brightness, border) (Light/Dark modes)",
+    "Typography": "Inter font sizes (Apple scale: large-title → caption2)",
+    "Spacing": "8pt grid: xs(4) → 5xl(48)",
+    "Radius": "sm(8) → glass(32) + pill(9999)"
+  }
+}

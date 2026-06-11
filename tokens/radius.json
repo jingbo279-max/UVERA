@@ -1,0 +1,23 @@
+{
+  "radius/sm": {
+    "light": "8px"
+  },
+  "radius/md": {
+    "light": "12px"
+  },
+  "radius/lg": {
+    "light": "16px"
+  },
+  "radius/xl": {
+    "light": "20px"
+  },
+  "radius/2xl": {
+    "light": "24px"
+  },
+  "radius/pill": {
+    "light": "9999px"
+  },
+  "radius/glass": {
+    "light": "32px"
+  }
+}

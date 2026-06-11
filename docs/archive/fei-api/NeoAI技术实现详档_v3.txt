@@ -1,0 +1,577 @@
+NeoAI
+一张照片 · 一句话 · 一段视频
+核心功能技术实现详档
+API 调用 · 输入输出 · Prompt 模板 · 错误码
+Version 1.0  ·  2026.04
+
+0. 公共说明
+0.1 后端基础地址
+系统通过管理后台 app_settings 的 api_env 字段动态切换两套环境：
+# 开发环境
+API_BASE_DEV  = "https://dev.neodomain.cn"
+# 生产环境（默认）
+API_BASE_PROD = "https://story.neodomain.cn"
+# AI 模型网关（编剧 / Vision）
+AI_API_BASE   = "https://ai-api.neodomain.cn/v1"
+0.2 MemfireDB Edge Functions
+前端通过 MemfireDB 函数计算调用所有边缘函数，函数名映射为去连字符的 kebab-less 形式：
+MEMFIRE_FN_BASE = "https://functions5.memfiredb.com/d6vussgg91hj59690tv0"
+ 
+ai-screenwriter   →  /aiscreenwriter
+concept-design    →  /conceptdesign
+video-generate    →  /videogenerate
+oss-upload        →  /ossupload
+save-work         →  /savework
+user-auth         →  /userauth
+0.3 通用请求头
+Content-Type:  application/json
+Authorization: Bearer <MEMFIRE_ANON_KEY>      # 调用 Edge Function 时
+apikey:        <MEMFIRE_ANON_KEY>             # 调用 Edge Function 时
+accessToken:   <用户登录 token>                # 调用 neodomain 业务接口时
+0.4 通用响应结构（neodomain）
+{
+  "success": true,            // false 表示业务失败
+  "errCode":  "" ,            // 失败时返回错误码
+  "errMessage": "",           // 失败时返回中文描述
+  "data": { /* 业务数据 */ }
+}
+
+1. 功能一：创建角色
+1.1 调用链路
+前端
+  ├─ POST  /agent/sts/credentials              → 换取阿里云 OSS 临时凭证
+  ├─ PUT   <ossEndpoint>/<bucket>/<key>        → 直传照片到 OSS（上海节点）
+  └─ POST  Edge: /userauth                     → 写 user_characters 记录
+1.2 步骤 1：换取 STS 临时凭证
+请求
+POST  {API_BASE}/agent/sts/credentials
+Headers:
+  Content-Type: application/json
+  accessToken:  <用户登录 token>
+Body: {}
+响应示例
+{
+  "success": true,
+  "data": {
+    "accessKeyId":     "STS.NTxxxx",
+    "accessKeySecret": "wJalrxxxx",
+    "securityToken":   "CAIS+gF1q6Ft5xxxx",
+    "expiration":      "2026-04-18T17:30:00Z",
+    "endpoint":        "oss-cn-shanghai.aliyuncs.com",
+    "bucket":          "neoai-prod",
+    "region":          "cn-shanghai"
+  }
+}
+1.3 步骤 2：直传照片到 OSS
+PUT https://<bucket>.<endpoint>/characters/<userId>/<uuid>.jpg
+Headers:
+  Authorization:        OSS <accessKeyId>:<signature>   # 双签名重试：STS 优先，AK/SK 兜底
+  x-oss-security-token: <securityToken>
+  Content-Type:         image/jpeg
+Body: <二进制照片>
+ 
+→ 成功后得到 photoUrl:
+   https://neoai-prod.oss-cn-shanghai.aliyuncs.com/characters/u-123/9f8e.jpg
+失败时按"STS → AK/SK"双签名顺序重试，最多 2 次。
+1.4 步骤 3：（可选）Vision 提取身份特征
+在生成剧本时由 ai-screenwriter 函数自动调用一次，前端不需要单独调用。提示词如下：
+POST {AI_API_BASE}/chat/completions
+Headers:
+  Authorization: Bearer <NEODOMAIN_API_KEY>
+  Content-Type:  application/json
+Body:
+{
+  "model": "gemini-2.5-flash-lite",
+  "messages": [{
+    "role": "user",
+    "content": [
+      { "type": "image_url", "image_url": { "url": "data:image/jpeg;base64,<...>" }},
+      { "type": "text",      "text":      "请用中文简要描述这张照片中人物的身份特征，包括：\n1. 性别（男/女）\n2. 大致年龄段\n3. 外貌特征\n4. 穿着风格\n\n只输出描述文字。" }
+    ]
+  }]
+}
+Vision 输出示例
+"年轻男性，大约 25-30 岁，短发偏黑，方脸轮廓，浓眉，皮肤偏白，
+身着深灰色连帽卫衣，整体气质沉稳干净，有都市青年感。"
+1.5 步骤 4：写入 user_characters
+请求
+POST  {MEMFIRE_FN_BASE}/userauth
+Headers:
+  Authorization: Bearer <MEMFIRE_ANON_KEY>
+  Content-Type:  application/json
+Body:
+{
+  "action":   "createCharacter",
+  "userId":   "u-123",
+  "name":     "默认形象",
+  "photoUrl": "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/characters/u-123/9f8e.jpg"
+}
+响应示例
+{
+  "success": true,
+  "data": {
+    "characterId": "c-2026041801",
+    "userId":      "u-123",
+    "name":        "默认形象",
+    "photoUrl":    "https://...9f8e.jpg",
+    "createdAt":   "2026-04-18T08:30:00Z"
+  }
+}
+1.6 错误码
+错误码
+含义 / 处理建议
+NO_FACE_DETECTED
+未识别到人脸 → 引导用户重拍，提示光线 / 取景
+UPLOAD_FAILED
+OSS 双签名两次重试均失败 → 保留本地照片，允许重试
+CHARACTER_LIMIT_REACHED
+已达 3 个角色上限 → 引导先删除旧角色
+STS_TOKEN_EXPIRED
+凭证过期 → 自动重新换取，再上传
+
+2. 功能二：生成剧本
+2.1 调用链路
+前端 → Edge: /aiscreenwriter
+                 ├─ Vision 抽取身份特征（gemini-2.5-flash-lite）
+                 └─ 编剧主调用（gemini-3-flash-preview）→ JSON 结构化剧本
+2.2 请求
+POST  {MEMFIRE_FN_BASE}/aiscreenwriter
+Headers:
+  Authorization: Bearer <MEMFIRE_ANON_KEY>
+  Content-Type:  application/json
+Body:
+{
+  "style":        "wes-anderson",          // 风格 ID
+  "styleName":    "韦斯·安德森",            // 风格中文名（用于查 prompt 模板）
+  "transcript":   "一个咖啡师在午后阳光下煮一杯特别的咖啡，最后抬头微笑",
+  "videoType":    "trailer",               // trailer / vlog / mv / tvc / promo / short-drama
+  "hasPhoto":     true,
+  "photoData":    "data:image/jpeg;base64,<...>",  // base64 或 OSS URL
+  "previousStory": null,                   // 接龙创作时为上段剧情摘要
+  "apiBase":      "https://story.neodomain.cn"
+}
+2.3 关键 Prompt 模板
+System Prompt（节选，按 videoType 动态拼接）
+你是一位{role}，同时也是 Seedance 2.0 视频提示词大师。
+ 
+## 核心任务
+根据用户提供的动画风格和故事描述，创作一个{videoTypeLabel}风格的多镜头视频脚本。
+ 
+## 视频类型叙事指导
+- 叙事结构：{structure}
+- 整体调性：{tone}
+- 对白风格：{dialogueStyle}
+ 
+## ⚠️ 时长硬性约束（最高优先级）
+- 总时长必须在 8-15 秒之间
+- 设计 2-4 个镜头，每个镜头 2-6 秒
+- 镜头时长必须有节奏变化（如 3+5+2）
+- 所有镜头时长之和 = totalDuration
+ 
+## 一、镜头设计规范
+每个镜头必须包含五层描述：
+1. 运镜（摄影术语+方向+速度）
+2. 角色动作（具象化拆解，禁止模糊）
+3. 面部 / 口型（表情+嘴部+眼神）
+4. 场景环境（空间、材质、植被、天气、光影、道具、动态元素）
+5. 风格锚定 + 时间分配（前 2 秒...第 3-5 秒...）
+ 
+## 四、输出格式（严格 JSON，不要 markdown）
+{
+  "totalDuration": 10,
+  "segments":      [{"tag":"镜头1","text":"..."}],
+  "shots":         [{"shotNumber":1,"duration":"5秒","camera":"...","action":"...",
+                     "lighting":"...","sound":"...","dialogue":"...","videoPrompt":"≥80字"}],
+  "music":         {"style":"...","mood":"...","reference":"..."},
+  "videoPrompt":   "整合所有镜头的完整中文提示词",
+  "mood":          "整体情绪氛围",
+  "summary":       "一句话 tagline"
+}
+User Prompt（动态拼接）
+动画风格：韦斯·安德森
+ 
+## 风格视觉指导
+画面极致对称构图，柔和糖果色调（粉/黄/薄荷绿），微缩景观模型感，如精致的定格动画布景。
+预设情绪基调：冷幽默、精致、怀旧
+推荐配乐方向：60 年代法国流行乐或英伦民谣，轻快而略带忧郁
+ 
+用户故事描述：一个咖啡师在午后阳光下煮一杯特别的咖啡，最后抬头微笑
+ 
+⚠️ 重要：用户已上传了自己的照片作为角色参考。
+ 
+📸 照片人物身份识别结果：年轻男性，约 28 岁，短发偏黑，方脸轮廓，
+身着深灰色连帽卫衣，整体气质沉稳干净。
+ 
+你的剧本主角必须严格匹配以上身份特征。每个镜头都必须有这个角色出镜。
+ 
+⚠️ 最重要的约束：
+- 总时长 8-15 秒
+- 2-4 个镜头，每镜头 2-6 秒
+- 每个 videoPrompt 必须 ≥80 字，且包含精确时间段内容分配
+- 严禁出现任何文字 / 字幕 / LOGO / 水印
+2.4 响应示例
+{
+  "totalDuration": 10,
+  "segments": [
+    { "tag": "镜头1", "text": "对称构图特写：咖啡师在木质吧台前研磨咖啡豆" },
+    { "tag": "镜头2", "text": "推镜：滚烫水流注入手冲滤杯，蒸汽升腾" },
+    { "tag": "对白",  "text": "「这一杯，是给最特别的你。」" }
+  ],
+  "shots": [
+    {
+      "shotNumber": 1,
+      "duration":   "3秒",
+      "camera":     "正面对称构图，固定机位，轻微推近（dolly in）",
+      "action":     "咖啡师双手匀速转动磨豆机手柄，目光专注下垂",
+      "lighting":   "侧逆光，午后金色阳光从右侧窗户斜射进来",
+      "sound":      "磨豆机沙沙声 + 远处街道的轻微环境音",
+      "dialogue":   "无",
+      "videoPrompt": "韦斯·安德森风格，极致对称构图，年轻男性咖啡师身着深灰色连帽卫衣，
+                      站在木质吧台前匀速研磨咖啡豆，前 1.5 秒手柄转动 3 圈，
+                      第 1.5-3 秒镜头缓慢推进 10%。糖果色调（薄荷绿墙面、暖黄灯光），
+                      微缩定格质感，3 秒。"
+    }
+    /* shotNumber 2~3 略 */
+  ],
+  "music": {
+    "style":     "60 年代法国流行乐",
+    "mood":      "轻快略带忧郁",
+    "reference": "Françoise Hardy - Tous les garçons et les filles"
+  },
+  "videoPrompt": "整合三镜头的完整提示词...",
+  "mood":        "温暖怀旧、午后慢时光",
+  "summary":     "在最普通的午后，一杯咖啡也能成为情书。",
+  "identityDescription": "年轻男性，约 28 岁..."
+}
+2.5 错误码
+错误码 / HTTP
+含义 / 处理建议
+429
+请求过频 → 提示用户稍后重试
+402
+AI 额度不足 → 通知管理员补充 NEODOMAIN_API_KEY 余额
+500 + JSON 解析失败
+AI 未返回严格 JSON → 自动 fallback 到原始文本，前端可重试一次
+totalDuration 越界
+解析后夹紧到 5~30s 区间
+
+3. 功能三：选择风格
+3.1 说明
+风格选择是纯前端 + 配置层的操作：所有 52 种风格的元数据（中文名、英文 prompt、服装提示词、配乐建议、是否需要真人审核）都已在 ai-screenwriter 与 concept-design 函数内固化为 styleScreenwritingMap / styleMap 常量。前端只负责把 styleId 与 styleName 透传给后续两个函数。
+3.2 风格元数据结构
+styleScreenwritingMap[styleName] = {
+  visualGuidance: "画面极致对称构图，柔和糖果色调...",   // 注入编剧 prompt
+  moodPreset:     "冷幽默、精致、怀旧",                  // 推荐情绪
+  musicPreset:    "60 年代法国流行乐..."                 // 推荐配乐
+}
+ 
+styleMap[styleName] = {
+  en:      "Wes Anderson aesthetic, perfectly symmetrical composition...",  // 注入图片 prompt
+  costume: "vintage tailored suit or corduroy outfit, bow tie..."           // 推荐服装
+}
+3.3 触发真人审核的风格集合
+REAL_PERSON_REVIEW_STYLES = new Set([
+  'souls-dark-fantasy',          // 黑魂式暗黑幻想
+  'gritty-realism',              // 硬核工业写实
+  'painterly-npr',               // 唯美手绘 NPR
+  'vhs-horror',                  // 录像带模拟恐怖
+  'cinematic-photorealistic',    // 写实电影感
+  'illumination',                // 照明娱乐风
+  'wes-anderson',                // 韦斯·安德森
+  'belleville',                  // 佳丽村三姐妹
+  'scanner-darkly',              // 黑暗扫描风
+])
+3.4 前端选择后写入 works 表
+UPDATE works
+SET style       = 'wes-anderson',
+    style_name  = '韦斯·安德森'
+WHERE id = '<workId>';
+
+4. 功能四：生成角色图
+4.1 调用链路
+前端 → Edge: /conceptdesign
+            ├─ GET  /agent/ai-image-generation/models/by-scenario?scenarioType=4
+            │       → 拿到当前账号可用模型列表（首选 gemini-3.1-flash-image-preview）
+            ├─ POST /agent/ai-image-generation/generate
+            │       → 提交角色图生成任务，返回 task_code
+            └─（前端轮询）GET /agent/ai-image-generation/task/<task_code>
+                                → 轮询直到拿到 image_urls
+ 
+→（如属于 9 种写实风格）
+前端 → POST /agent/ark-asset-review/submit  → 同步等待真人审核结果
+4.2 步骤 1：提交角色图生成任务
+请求
+POST  {MEMFIRE_FN_BASE}/conceptdesign
+Headers:
+  Authorization: Bearer <MEMFIRE_ANON_KEY>
+  Content-Type:  application/json
+Body:
+{
+  "styleName":   "韦斯·安德森",
+  "summary":     "在最普通的午后，一杯咖啡也能成为情书。",
+  "mood":        "温暖怀旧",
+  "photoData":   "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/characters/u-123/9f8e.jpg",
+  "accessToken": "<用户登录 token>",
+  "modelName":   null,                              // 留空 → 自动选 gemini-3.1-flash-image
+  "apiBase":     "https://story.neodomain.cn"
+}
+响应
+{
+  "taskCode":  "tk_2026041808351234",
+  "modelName": "gemini-3.1-flash-image-preview"
+}
+4.3 关键 Prompt 模板
+完整 Prompt（自动拼装）
+Professional CHARACTER MODEL SHEET (character turnaround + face close-up).
+Art style: Wes Anderson aesthetic, perfectly symmetrical composition, flat perspective,
+pastel color palette pink yellow mint, stop-motion charm, whimsical miniature dollhouse feel,
+deadpan quality.
+Story: 在最普通的午后，一杯咖啡也能成为情书。
+Mood: 温暖怀旧.
+ 
+CRITICAL: Reference photo provided. Precisely preserve face shape, features, skin tone,
+hairstyle, body type. Adapt clothing to: vintage tailored suit or corduroy outfit, bow tie,
+beret, muted pastel tones, retro-preppy accessories.
+Character must be IMMEDIATELY RECOGNIZABLE as the same person.
+ 
+Expression: gentle smile, soft warm eyes, relaxed brow.
+ 
+Layout: clean background with faint grid,
+LEFT 60% full-body three-view turnaround (front, 3/4 side, back),
+RIGHT 40% large facial close-up.
+Quality: masterpiece, 8k, highly detailed, production-ready.
+Negative: no watermark, text, signature, extra limbs, deformed, blurry.
+Negative Prompt
+blurry, low quality, watermark, signature, text, extra limbs, deformed face, bad hands
+4.4 步骤 2：前端轮询任务结果
+GET   {API_BASE}/agent/ai-image-generation/task/<taskCode>
+Headers:
+  accessToken: <用户登录 token>
+ 
+→ 响应示例:
+{
+  "success": true,
+  "data": {
+    "task_code":  "tk_2026041808351234",
+    "status":     "SUCCESS",          // PENDING / PROCESSING / SUCCESS / FAILED
+    "image_urls": ["https://neoai-prod.oss-cn-shanghai.aliyuncs.com/concept/.../1.png"]
+  }
+}
+前端轮询间隔 2s，最多 60 次（约 2 分钟）。拿到 image_urls[0] 即作为 characterImageUrl 写入 works.concept_image_url。
+4.5 步骤 3：真人审核（仅 9 种写实风格）
+请求
+POST  {API_BASE}/agent/ark-asset-review/submit
+Headers:
+  Content-Type: application/json
+  accessToken:  <用户登录 token>
+Body:
+{
+  "imageUrl": "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/concept/.../1.png"
+}
+响应（同步返回，最长 ~50s）
+{
+  "success": true,
+  "data": {
+    "fileName":         "1.png",
+    "imageUrl":         "https://...",
+    "groupName":        "neoai-default",
+    "arkAssetId":       "ark_20260418083612",
+    "reviewStatus":     2,             // 0 待审核 / 1 审核中 / 2 通过 / 3 失败
+    "reviewStatusDesc": "审核通过",
+    "taskStatus":       3,             // 3 = 处理完成
+    "errorMessage":     null,
+    "existed":          false
+  }
+}
+前端处理逻辑
+if (reviewStatus === 2) {
+  // 通过：解锁"下一步：视频生成"按钮
+} else if (reviewStatus === 3) {
+  // 失败：禁用按钮，提示"角色图含真人元素无法用于生成视频，请重新生成"
+} else {
+  // pending：按钮文案显示"审核中…"，禁用跳转
+}
+4.6 错误码
+错误码
+含义 / 处理建议
+INSUFFICIENT_POINTS
+积分不足 → 触发 RechargeDialog（50/100/200/500 元套餐）
+MEMBERSHIP_REQUIRED
+当前模型需要会员权限 → 提示用户升级
+REVIEW_TIMEOUT
+审核 >60s 未返回 → 标记为待复核，允许人工重试
+REVIEW_REJECTED
+reviewStatus=3 → 阻止视频生成，强制重新生成角色图
+
+5. 功能五：生成视频
+5.1 调用链路
+前端 → Edge: /videogenerate (action=create)
+            └─ POST /agent/user/video/generate    → 返回 generationRecordId
+ 
+前端轮询 → Edge: /videogenerate (action=poll)
+            └─ GET /agent/user/video/status/<id>  → 拿到 ossVideoUrl
+5.2 生成类型自动判定
+类型
+触发条件
+额外字段
+T2V
+仅 prompt
+无图无视频参考
+I2V
+characterImageUrl 或 sceneImageUrl
+firstFrameImageUrl + 可选 imageUrls
+R2V
+referenceVideoUrl（接龙创作）
+referenceVideoUrls
+U2V
+同时有图与参考视频
+firstFrameImageUrl + imageUrls + referenceVideoUrls
+5.3 步骤 1：提交视频任务
+请求
+POST  {MEMFIRE_FN_BASE}/videogenerate
+Headers:
+  Authorization: Bearer <MEMFIRE_ANON_KEY>
+  Content-Type:  application/json
+Body:
+{
+  "action":             "create",
+  "prompt":             "<完整中文 videoPrompt，来自剧本第 4 步>",
+  "characterImageUrl":  "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/concept/.../1.png",
+  "sceneImageUrl":      null,
+  "imageUrl":           null,
+  "referenceVideoUrl":  null,
+  "duration":           10,                       // 5 / 10 / 15
+  "totalDuration":      10,                       // 用于后端计费
+  "model":              "seedance2.0",
+  "accessToken":        "<用户登录 token>",
+  "apiBase":            "https://story.neodomain.cn"
+}
+Edge Function 内部调用 neodomain
+POST {API_BASE}/agent/user/video/generate
+Headers:
+  Content-Type: application/json
+  accessToken:  <用户登录 token>
+Body:
+{
+  "modelName":          "seedance2.0",
+  "generationType":     "I2V",
+  "prompt":             "<image1> 是角色设定图（包含角色三视图和面部特写），
+                         视频中的角色外观、服装和体型必须严格以 <image1> 为主角基准。
+                         场景和环境请根据文字描述生成。
+                         请根据以下文字描述生成视频：
+                         <剧本 videoPrompt 全文>
+                         【重要】画面中不要出现任何 LOGO、水印或品牌标识；
+                         不要出现任何字幕、文字或标题。",
+  "aspectRatio":        "16:9",
+  "resolution":         "720p",
+  "duration":           "10s",
+  "generateAudio":      true,
+  "enhancePrompt":      false,
+  "totalDuration":      10,
+  "firstFrameImageUrl": "https://...characterImage.png"
+}
+响应
+# Edge function 包装后:
+{
+  "taskId": "rec_20260418083855xyz",        // = neodomain.generationRecordId
+  "status": "pending"
+}
+5.4 步骤 2：轮询任务状态
+请求
+POST  {MEMFIRE_FN_BASE}/videogenerate
+Body:
+{
+  "action":      "poll",
+  "taskId":      "rec_20260418083855xyz",
+  "accessToken": "<用户登录 token>",
+  "apiBase":     "https://story.neodomain.cn"
+}
+Edge Function 内部调用 neodomain
+GET   {API_BASE}/agent/user/video/status/rec_20260418083855xyz
+Headers:
+  accessToken:  <用户登录 token>
+ 
+→ 响应:
+{
+  "success": true,
+  "data": {
+    "status":       "SUCCESS",      // PENDING / PROCESSING / SUCCESS / FAILED
+    "ossVideoUrl":  "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/videos/.../final.mp4",
+    "thumbnailUrl": "https://...thumb.jpg",
+    "errorCode":    "",
+    "errorMessage": ""
+  }
+}
+Edge function 包装后状态映射
+neodomain
+Edge 返回
+前端处理
+PENDING
+queued
+显示"排队中"
+PROCESSING
+running
+显示进度条 + 二维码
+SUCCESS
+succeeded
+videoUrl 写入 works，叠加水印展示
+FAILED
+failed
+显示错误信息 + errorCode
+5.5 错误码
+错误码 / errCode
+含义 / 处理建议
+SensitiveContent
+参考图含真人 → 提示返回重新生成动漫风格角色图
+PrivacyInformation
+隐私信息泄漏 → 同上
+INSUFFICIENT_POINTS
+积分不足 → 弹出 RechargeDialog
+模型不存在 / 模型不可用
+账户无权使用 → 提示联系管理员或升级企业账户
+429
+请求过频 → 退避重试
+504
+Edge function 50s 超时 → 自动重试 1 次
+
+6. 端到端调用示例
+以下为一次完整的"咖啡师午后"创作流程，5 个功能依次调用的关键参数与产出：
+Step 1：创建角色
+输入: 用户拍摄一张照片 (640x480 jpg, 120KB)
+产出: characterId    = "c-2026041801"
+      photoUrl       = "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/characters/u-123/9f8e.jpg"
+      identityFeatures = "年轻男性，约 28 岁，短发偏黑，方脸轮廓..."
+Step 2：生成剧本
+输入: transcript = "一个咖啡师在午后阳光下煮一杯特别的咖啡，最后抬头微笑"
+      videoType  = "trailer"
+      hasPhoto   = true, photoData = <photoUrl>
+产出: totalDuration = 10
+      shots         = [3 个镜头，每个 ≥80 字 videoPrompt]
+      summary       = "在最普通的午后，一杯咖啡也能成为情书。"
+      videoPrompt   = <整合后中文长 prompt>
+Step 3：选择风格
+输入: styleId = "wes-anderson"
+产出: needsRealPersonReview = true
+      stylePromptTemplate    = styleMap['韦斯·安德森'].en
+Step 4：生成角色图
+输入: styleName + summary + mood + photoUrl + accessToken
+产出: characterImageUrl = "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/concept/.../1.png"
+      reviewStatus      = 2 (通过)
+Step 5：生成视频
+输入: characterImageUrl + videoPrompt + totalDuration=10 + accessToken
+产出: requestId = "rec_20260418083855xyz"
+      videoUrl  = "https://neoai-prod.oss-cn-shanghai.aliyuncs.com/videos/.../final.mp4"
+      duration  = 10s
+      cost      = 100 积分（≈ 1 元）
+完整数据写入 works 表
+INSERT INTO works (
+  id, user_id, photo_data, style, style_name, transcript,
+  script_segments, script_summary, script_mood, video_prompt,
+  concept_image_url, request_id, video_url, created_at
+) VALUES (
+  'w-2026041808400001', 'u-123', '<photoUrl>', 'wes-anderson', '韦斯·安德森',
+  '一个咖啡师在午后阳光下煮一杯特别的咖啡，最后抬头微笑',
+  '<JSON shots>', '在最普通的午后，一杯咖啡也能成为情书。', '温暖怀旧',
+  '<JSON videoPrompt>', '<characterImageUrl>',
+  'rec_20260418083855xyz', '<videoUrl>', NOW()
+);

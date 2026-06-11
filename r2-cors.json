@@ -1,0 +1,16 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": [
+          "http://localhost:5176",
+          "https://uvera.ai",
+          "https://*.uvera.pages.dev"
+        ],
+        "methods": ["GET", "PUT", "HEAD"],
+        "headers": ["*"]
+      },
+      "maxAgeSeconds": 3600
+    }
+  ]
+}

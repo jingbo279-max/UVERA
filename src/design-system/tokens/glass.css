@@ -1,0 +1,907 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Glass Materials — Apple iOS UIBlurEffect + visionOS Windows/Glass spec
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ NAMING NOTICE (2026-05-18 Leon — rename completed):
+     This family encodes the **iOS UIBlurEffect.Style** taxonomy (.regularMaterial
+     / .thinMaterial / .ultraThinMaterial / .thickMaterial) and visionOS
+     Windows/Glass (Figma node 139:23912, Glass Specular stroke).
+
+     It is NOT Apple's "Liquid Glass" — that's a separate, newer material
+     announced at WWDC 2025 (iOS 26 / iPadOS 26 only, dynamic refraction +
+     living edge highlights). Desktop web does NOT implement Liquid Glass.
+
+     History: this family was originally named `.liquid-glass-*` (misleading
+     — pre-dated Apple's 2025 trademark). Renamed wholesale to `.glass-*`
+     2026-05-18 (commit covers 15 files; consumers + 2 token CSS).
+
+   Material selection guide:
+     · floating windows / panels  →  this family (.glass-* below)
+     · content surfaces inside    →  Views Materials (.material-*,
+                                     see tokens/materials.css)
+     · iOS 26 Liquid Glass effect →  NOT IN SCOPE (Desktop)
+
+   Each variant exposes --_glass-* private variables for:
+     bg, blur, saturate, brightness, border
+   These map 1:1 to Figma "Glass" Variable Collection (visionOS spec).
+   box-shadow kept inline (complex multi-value, not practical to variablize).
+
+   Base variants:
+     .glass-regular    Regular    · adaptive white tint · general purpose      (iOS .regularMaterial)
+     .glass-clear      Clear      · ultra-transparent   · media-rich bg        (iOS .thinMaterial)
+     .glass-ultra-thin UltraThin  · faintest wash       · over tinted surfaces (iOS .ultraThinMaterial)
+     .glass-dark       Dark       · black tint          · dark panels/overlays
+   Modifiers:
+     .glass-tinted     Tinted    · brand/violet tint   · CTAs
+     .glass-prominent  Prominent · higher opacity       · primary actions      (iOS .thickMaterial)
+     .glass-morphing   Morphing  · heaviest blur        · expanded states
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Shared transition ── */
+.glass-regular,
+.glass-clear,
+.glass-ultra-thin,
+.glass-dark,
+.glass-tinted,
+.glass-prominent,
+.glass-morphing,
+.glass-ctrl-on,
+.glass-ctrl-off,
+.glass-ctrl-icon-on,
+.glass-ctrl-icon-off,
+.glass-overlay,
+.glass-chip,
+.glass-icon-muted,
+.glass-icon-ghost {
+  transition: background 0.5s ease, box-shadow 0.5s ease, border-color 0.5s ease;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Verified gradient-stroke recipe — single source of truth
+   ───────────────────────────────────────────────────────────────────────────
+   2026-05-18 Leon round-12 — 抽出 visionOS-spec stroke gradient 为共享
+   custom properties. 任何 panel/control 想要 visionOS 同款"顶亮底暗 180°
+   stroke" 都 reference 这套 vars,调一处全同步.
+
+   规格出处:
+     - Figma node 139:23912 (Windows/Glass + Windows/(Stroke) Glass Specular)
+     - .glass-frosted-edge (Leon 2026-05-06 Q4-A 决策)
+     - Apple visionOS .regularMaterial 边缘高光 spec
+
+   Stroke 宽度:
+     visionOS native = 1.4px (AR 视距下需要更厚 stroke 才读得出)
+     Desktop / 2D web = 1px (近距离观看,1.4px 显得过粗"重 ring")
+     Leon 2026-05-18 明确指示: Desktop 应 < visionOS 1.4px
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --glass-stroke-width:  1px;
+  /* 2026-05-19 round-25 — Figma authoritative CSS (Leon 贴 Code panel CSS).
+     上轮 round-24 我用 REST API 的 stop positions (0/40.57/57.44/100) 错了 —
+     那是 gradient axis 内部坐标,需经 Figma 坐标系转换才是 CSS percentage.
+     Authoritative CSS from Figma Code panel:
+       linear-gradient(157deg,
+         rgba(255,255,255,0.40)  2.12%,
+         rgba(255,255,255,0.00)  39%,
+         rgba(255,255,255,0.00)  54.33%,
+         rgba(255,255,255,0.10)  93.02%);
+     Process lesson: REST API position values 是 axis-internal (handle0→1
+     normalized),与 CSS 用的 box-visible percentage 不同. 直接复制粘贴
+     Figma Code panel CSS 最 reliable; helper script 待加坐标转换. */
+  --glass-stroke-spec:
+    linear-gradient(157deg,
+      rgba(255, 255, 255, 0.40) 2.12%,
+      rgba(255, 255, 255, 0.00) 39%,
+      rgba(255, 255, 255, 0.00) 54.33%,
+      rgba(255, 255, 255, 0.10) 93.02%);
+  --glass-stroke-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.10);
+}
+.dark {
+  --glass-stroke-spec:
+    linear-gradient(157deg,
+      rgba(255, 255, 255, 0.40) 2.12%,
+      rgba(255, 255, 255, 0.00) 39%,
+      rgba(255, 255, 255, 0.00) 54.33%,
+      rgba(255, 255, 255, 0.10) 93.02%);
+  --glass-stroke-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.10);
+}
+
+/* ── Regular — visionOS Windows/Glass spec (verbatim per Figma Code Mode) ── */
+.glass-regular {
+  /* 2026-05-19 round-27 — replaces iOS UIBlur recipe with visionOS Windows/Glass
+     (Leon 5/19 authoritative Figma Code Mode export):
+       background: rgba(128, 128, 128, 0.30);
+       background-blend-mode: luminosity;   ← key visionOS signature
+       backdrop-filter: blur(50px);
+       box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.10);
+
+     Removed (iOS UIBlur signature, NOT visionOS):
+       - saturate(1.8) / brightness(1.05) backdrop boosts
+       - inset top white 0.60 + inset bottom black 0.05 highlights
+
+     Border 1.4px in Figma → kept 1px Desktop convention (Leon: Desktop < visionOS
+     1.4). When stacked with .glass-border-gradient modifier the gradient stroke
+     takes over the border-color anyway. */
+  --_glass-bg:         rgba(128, 128, 128, 0.30);
+  --_glass-blur:       50px;
+  --_glass-border:     rgba(255, 255, 255, 0.40);
+
+  background:              var(--_glass-bg);
+  background-blend-mode:   luminosity;
+  backdrop-filter:         blur(var(--_glass-blur));
+  -webkit-backdrop-filter: blur(var(--_glass-blur));
+  border:                  var(--glass-stroke-width, 1px) solid var(--_glass-border);
+  box-shadow:              0 2px 4px 0 rgba(0, 0, 0, 0.10);
+}
+
+/* ── Clear — iOS .thinMaterial spec (ultra-transparent over media-rich bg) ── */
+.glass-clear {
+  --_glass-bg:         rgba(245, 245, 250, 0.08);
+  --_glass-blur:       80px;
+  --_glass-saturate:   2.0;
+  --_glass-brightness: 1.05;
+  --_glass-border:     rgba(255, 255, 255, 0.18);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 2px 16px rgba(0, 0, 0, 0.12),
+    0 0  0 0.5px rgba(0, 0, 0, 0.04),
+    inset 0  1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.06);
+}
+
+/* ── Ultra Thin — iOS .ultraThinMaterial (faintest wash over tinted surfaces) ─ */
+.glass-ultra-thin {
+  --_glass-bg:         rgba(255, 255, 255, 0.04);
+  --_glass-blur:       100px;
+  --_glass-saturate:   2.2;
+  --_glass-brightness: 1.04;
+  --_glass-border:     rgba(255, 255, 255, 0.10);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 1px 12px rgba(0, 0, 0, 0.08),
+    inset 0  1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.04);
+}
+
+/* ── Dark — black tint ───────────────────────────────────────────────────── */
+.glass-dark {
+  --_glass-bg:         rgba(0, 0, 0, 0.18);
+  --_glass-blur:       40px;
+  --_glass-saturate:   1.6;
+  --_glass-brightness: 0.95;
+  --_glass-border:     rgba(255, 255, 255, 0.14);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.25),
+    inset 0  1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.15);
+}
+
+/* ── Tinted — violet brand tint ──────────────────────────────────────────── */
+.glass-tinted {
+  --_glass-bg:         rgba(124, 58, 237, 0.22);
+  --_glass-blur:       36px;
+  --_glass-saturate:   1.9;
+  --_glass-brightness: 1.06;
+  --_glass-border:     rgba(167, 139, 250, 0.45);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 4px 24px rgba(124, 58, 237, 0.25),
+    inset 0  1px 0 rgba(255, 255, 255, 0.40),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.06);
+}
+
+/* ── Prominent — higher opacity ──────────────────────────────────────────── */
+.glass-prominent {
+  --_glass-bg:         rgba(255, 255, 255, 0.28);
+  --_glass-blur:       48px;
+  --_glass-saturate:   1.6;
+  --_glass-brightness: 1.08;
+  --_glass-border:     rgba(255, 255, 255, 0.55);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.16),
+    inset 0  1px 0 rgba(255, 255, 255, 0.70),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.06);
+}
+
+/* ── Morphing — heaviest blur ────────────────────────────────────────────── */
+.glass-morphing {
+  --_glass-bg:         rgba(255, 255, 255, 0.22);
+  --_glass-blur:       56px;
+  --_glass-saturate:   1.7;
+  --_glass-brightness: 1.06;
+  --_glass-border:     rgba(255, 255, 255, 0.48);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.18),
+    0  2px  8px rgba(0, 0, 0, 0.08),
+    inset 0  1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.06);
+}
+
+/* ── Dark Mode — Glass family overrides ─────────────────────────────────────
+   2026-05-19 round-27 — .dark .glass-regular intentionally NO override.
+   Figma Windows/Glass var is mode-agnostic (single value across light/dark),
+   so .glass-regular's gray 30% LUMINOSITY recipe applies in both modes. The
+   prior iOS UIBlur-style overrides (white 0.08 + saturate/brightness/inset
+   shadows) are removed. */
+
+.dark .glass-clear {
+  --_glass-bg:         rgba(255, 255, 255, 0.05);
+  --_glass-saturate:   1.6;
+  --_glass-brightness: 0.85;
+  --_glass-border:     rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 2px 16px rgba(0, 0, 0, 0.35),
+    inset 0  1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.15);
+}
+
+.dark .glass-ultra-thin {
+  --_glass-bg:         rgba(255, 255, 255, 0.03);
+  --_glass-saturate:   1.5;
+  --_glass-brightness: 0.82;
+  --_glass-border:     rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 1px 12px rgba(0, 0, 0, 0.30),
+    inset 0  1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.12);
+}
+
+.dark .glass-dark {
+  --_glass-bg:         rgba(0, 0, 0, 0.35);
+  --_glass-saturate:   1.4;
+  --_glass-brightness: 0.80;
+  --_glass-border:     rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.50),
+    inset 0  1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.25);
+}
+
+.dark .glass-tinted {
+  --_glass-bg:         rgba(124, 58, 237, 0.28);
+  --_glass-saturate:   1.6;
+  --_glass-brightness: 0.88;
+  --_glass-border:     rgba(167, 139, 250, 0.30);
+  box-shadow:
+    0 4px 24px rgba(124, 58, 237, 0.35),
+    inset 0  1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.15);
+}
+
+.dark .glass-prominent {
+  --_glass-bg:         rgba(255, 255, 255, 0.10);
+  --_glass-saturate:   1.4;
+  --_glass-brightness: 0.88;
+  --_glass-border:     rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.40),
+    inset 0  1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.18);
+}
+
+.dark .glass-morphing {
+  --_glass-bg:         rgba(255, 255, 255, 0.08);
+  --_glass-saturate:   1.5;
+  --_glass-brightness: 0.85;
+  --_glass-border:     rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.45),
+    0  2px  8px rgba(0, 0, 0, 0.20),
+    inset 0  1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.18);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Modifier: .glass-border-gradient — visionOS-style gradient edge
+   2026-05-18 Leon — Upload Video (Create channel) 大块用. 替换 .glass-regular
+   等 base 的单色 border 为 3-stop linear gradient (135deg 由 top-left 高光
+   → 中段衰减 → bottom-right 高光), 类似 visionOS 那种"环绕光泽"边缘.
+   Apply alongside .glass-regular / .glass-clear / etc.:
+     <div className="glass-regular glass-border-gradient ..."/>
+   ───────────────────────────────────────────────────────────────────────────── */
+.glass-border-gradient {
+  /* 2026-05-18 round-12 + 19 + 27 evolution:
+     - round-12: stroke recipe to shared --glass-stroke-* vars (SSOT)
+     - round-19: specificity fix via explicit .dark .glass-border-gradient
+     - round-27: + `background-blend-mode: luminosity, normal`
+                 Layer 1 (padding-box fill) → luminosity blend (visionOS sig.)
+                 Layer 2 (border-box stroke) → normal (gradient keeps its color)
+                 + fallback --_glass-bg switched to gray rgba(128,128,128,0.30)
+                   matching Figma Windows/Glass var default. */
+  border: var(--glass-stroke-width) solid transparent;
+  background:
+    var(--_glass-bg, rgba(128, 128, 128, 0.30)) padding-box,
+    var(--glass-stroke-spec) border-box;
+  background-blend-mode: luminosity, normal;
+  box-shadow: var(--glass-stroke-shadow);
+}
+.dark .glass-border-gradient {
+  /* Dark mode: same spec — Figma Windows/Glass is mode-agnostic. Specificity
+     match against .dark .glass-regular preserved (round-19 fix). */
+  background:
+    var(--_glass-bg, rgba(128, 128, 128, 0.30)) padding-box,
+    var(--glass-stroke-spec) border-box;
+  background-blend-mode: luminosity, normal;
+  box-shadow: var(--glass-stroke-shadow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tier System (2026-05-03 Leon) — see docs/decisions/2026-05-03-glass-
+   tier-system.md
+     T0  Liquid Glass — hero only (Center Play, Replay), inline T2 v3 spec
+     T-1a Frosted with edge — supporting controls   (.glass-frosted-edge)
+     T-1b Frosted no edge   — backdrop / panel       (.glass-frosted-no-edge)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* T-1a: simple edge for floating controls that need button-ness over video.
+   2026-05-06 Leon Q4-A — linear gradient border (180° 顶亮底暗，模拟
+   光从上来). padding-box / border-box 双层背景把 gradient 锁在 stroke 上.
+   2026-05-18 round-12 — stroke recipe 抽到 :root vars (--glass-stroke-*),
+   light/dark 自动 cascade. 调一处全同步. */
+.glass-frosted-edge {
+  --_glass-bg:       rgba(0, 0, 0, 0.40);
+  --_glass-blur:     18px;
+  --_glass-saturate: 1.2;
+
+  background:
+    linear-gradient(var(--_glass-bg), var(--_glass-bg)) padding-box,
+    var(--glass-stroke-spec) border-box;
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate));
+  border:                  var(--glass-stroke-width) solid transparent;
+  box-shadow:              var(--glass-stroke-shadow);
+  transition: background 0.5s ease, box-shadow 0.5s ease;
+}
+.dark .glass-frosted-edge {
+  --_glass-bg:       rgba(0, 0, 0, 0.50);
+  --_glass-saturate: 1.1;
+  /* stroke spec/shadow inherit from .dark root vars — no re-declare needed. */
+}
+
+/* T-1b: heavier blur compensates for missing edge — gives "frosted" identity
+   without an explicit border. Used on dark-context floating controls. */
+.glass-frosted-no-edge {
+  --_glass-bg:       rgba(0, 0, 0, 0.40);
+  --_glass-blur:     28px;
+  --_glass-saturate: 1.1;
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate));
+  border:                  none;
+  box-shadow:              0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: background 0.5s ease, box-shadow 0.5s ease;
+}
+.dark .glass-frosted-no-edge {
+  --_glass-bg:       rgba(0, 0, 0, 0.50);
+  --_glass-saturate: 1.0;
+  box-shadow:        0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* ── Segmented Control (dual-track: iOS for mobile/iPad, visionOS for desktop)
+ * Token-based theming via CSS custom properties:
+ *   --segctrl-bg                  container background
+ *   --segctrl-selected-bg         selected pill bg
+ *   --segctrl-selected-shadow     selected pill drop shadow
+ *   --segctrl-selected-border     selected pill border (visionOS hairline)
+ *   --segctrl-text                label text color
+ *   --segctrl-separator           separator line color
+ *
+ * Mode matrix:
+ *   default:                      iOS Light (mobile/iPad light theme)
+ *   .dark:                        iOS Dark (mobile/iPad dark theme)
+ *   @media desktop visionOS:      visionOS Light (desktop light theme)
+ *   .dark @media desktop:         visionOS Dark (desktop dark theme)
+ *
+ * Per dual-track design system decision (2026-04-29). */
+.segmented-control {
+  --segctrl-bg:              rgba(118, 118, 128, 0.12);   /* iOS Fills/Tertiary */
+  --segctrl-selected-bg:     #ffffff;                     /* iOS segmented selected fill */
+  --segctrl-selected-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
+  --segctrl-selected-border: none;
+  --segctrl-text:            rgba(0, 0, 0, 1);            /* iOS Labels/Primary */
+  --segctrl-separator:       #8e8e93;                     /* iOS gray */
+
+  /* 2026-05-14 Leon — frosted-glass backdrop (visionOS HIG spec)。
+     甲方报: Discover Header 上 SegmentedControl 飘在 Hero 大字白底上,
+     5-12% 半透 bg + 无 blur 直接 bleed-through,文字读不清。
+     UIKit/visionOS 的 segmented control 本来就是 vibrancy blur 衬底,
+     这里之前漏了 backdrop-filter 才会融在一起。saturate 1.6 是 visionOS
+     标准饱和提升,blur 后保留色彩活力。 */
+  backdrop-filter:         blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+}
+.dark .segmented-control {
+  --segctrl-bg:              rgba(118, 118, 128, 0.24);
+  --segctrl-selected-bg:     rgba(118, 118, 128, 0.36);
+  --segctrl-text:            rgba(255, 255, 255, 1);
+  --segctrl-separator:       rgba(84, 84, 88, 0.65);
+}
+@media (pointer: fine) and (min-width: 1312px) {
+  .segmented-control {
+    /* Desktop visionOS Light — 2026-05-14 Leon
+       原 bg rgba(0,0,0,0.05) 在 Discover Hero(大字白底)上 5% 不够屏蔽,
+       甲方报「融在一起」。改 14% 黑 tint + blur 30px(从 20 升)。
+       Apple visionOS .regularMaterial 大概等效 20% tint + 30px blur,我们
+       SegmentedControl 走 .thinMaterial+ 偏一点的强度,保持视觉轻盈但能
+       挡住 Hero 大字 bleed-through。 */
+    --segctrl-bg:              rgba(0, 0, 0, 0.14);
+    --segctrl-selected-bg:     rgba(255, 255, 255, 0.92);
+    --segctrl-selected-shadow: 0 1px 2px rgba(0, 0, 0, 0.10);
+    --segctrl-selected-border: 0.5px solid rgba(0, 0, 0, 0.20);
+    --segctrl-text:            rgba(0, 0, 0, 0.96);
+    --segctrl-separator:       rgba(0, 0, 0, 0.18);
+    backdrop-filter:         blur(30px) saturate(1.6);
+    -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  }
+  .dark .segmented-control {
+    /* Desktop visionOS Dark — 同步升 blur 30px + bg 18% */
+    --segctrl-bg:              rgba(255, 255, 255, 0.18);
+    --segctrl-selected-bg:     rgba(255, 255, 255, 0.20);
+    --segctrl-selected-shadow: 0 1px 2px rgba(0, 0, 0, 0.20);
+    --segctrl-selected-border: 0.5px solid rgba(255, 255, 255, 0.40);
+    --segctrl-text:            rgba(255, 255, 255, 0.96);
+    --segctrl-separator:       rgba(255, 255, 255, 0.30);
+    backdrop-filter:         blur(30px) saturate(1.6);
+    -webkit-backdrop-filter: blur(30px) saturate(1.6);
+  }
+}
+
+/* T-1b light: frosted-no-edge variant with white tint (vs black tint of
+   T-1b dark). Used by Spark bottom control bar — Figma-spec'd light
+   frosted (Fill #fff 10% + Background Blur Uniform 92, Figma → CSS /2).
+   Keep base color separate from T-1b dark since they apply in opposite
+   contexts (this one over dim video w/o needing dark dim, T-1b dark
+   over content needing dark dim). */
+.glass-frosted-no-edge-light {
+  background:              rgba(255, 255, 255, 0.10);
+  backdrop-filter:         blur(46px);
+  -webkit-backdrop-filter: blur(46px);
+  border:                  none;
+  transition: background 0.5s ease;
+}
+
+/* ── T0 Liquid Glass hero (CSS ceiling per 2026-05-03-glass-regular-
+   fidelity-deferral.md) ──────────────────────────────────────────────
+   Multi-layer recipe encapsulating the T2 v3 spec used for Spark hero
+   buttons (Center Play 80x80, Replay 80x80). 4-layer background +
+   5-shadow recipe; no real refraction (T3 canvas territory).
+   Radial highlights tuned for circular containers; if applied to
+   non-circle shapes the meniscus ring + 2 highlights will read off. */
+.glass-hero {
+  /* 2026-05-17 Leon — 降「球体凸起感」: top-left specular 45→25%,
+     bottom-right 18→10%,meniscus ring 20/28/10→10/15/05%,
+     border specular 85→50%/30→18%/05→03%/45→22%,inset top highlight
+     30→14%,inset bottom 18→10%,outer halo 35→24%。整体保留玻璃质感
+     但不再像 3D 凸球。Spark/Library 同步生效(canonical spec)。 */
+  border: 1px solid transparent;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.08) 12%, transparent 25%) padding-box,
+    radial-gradient(circle at 72% 78%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 8%, transparent 18%) padding-box,
+    radial-gradient(circle at 50% 50%, transparent 0%, transparent 84%, rgba(0,0,0,0.10) 89%, rgba(0,0,0,0.15) 92%, rgba(0,0,0,0.05) 96%, transparent 100%) padding-box,
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.04) 100%) padding-box,
+    linear-gradient(165deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.18) 25%, rgba(255,255,255,0.03) 60%, rgba(255,255,255,0.22) 100%) border-box;
+  backdrop-filter:         blur(4px) saturate(1.3) brightness(1.02) contrast(1.02);
+  -webkit-backdrop-filter: blur(4px) saturate(1.3) brightness(1.02) contrast(1.02);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 0.14),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.10);
+}
+
+/* ── Surface — sunken (visionOS "carved into surface" input look) ────
+   Used by inputs / textareas inside frosted panels. Inset top shadow
+   + bottom highlight create a "well" effect distinct from a flat
+   overlay. Stay minimal — works well on any panel/glass background. */
+.surface-sunken {
+  background: rgba(0, 0, 0, 0.18);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.30),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* ── Glass pane container — visionOS Windows/Glass (Figma node 139:23912 /
+   swatch 865:1172) ───────────────────────────────────────────────────
+   Authoritative spec (Leon 2026-05-19 round-27, Figma Code panel):
+
+     border-radius:           20px
+     border:                  1.4px solid var(--Windows-(Stroke) Glass Specular)
+                              [157deg 4-stop, single-corner specular]
+     background:              var(--Windows-Glass) = rgba(128,128,128,0.30)
+     background-blend-mode:   luminosity  ← Figma layer-blend model
+     box-shadow:              0 2px 4px 0 rgba(0,0,0,0.10)
+     backdrop-filter:         blur(50px)
+
+   2026-05-19 round-30 — Four-layer split with SVG stroke:
+     · parent: drop shadow + clip
+     · ::before (z:0): backdrop-filter blur(50px) ONLY
+     · ::after  (z:1): fill rgba(128,128,128,0.30) + mix-blend luminosity
+     · consumer SVG overlay (z:2): 157deg/4-stop stroke gradient
+     · consumer children (z:3): content
+
+   Why SVG stroke (round-30): round-27/28/29 used CSS
+   `background-image border-box` for stroke gradient with SSOT
+   --glass-stroke-spec. CSS gradient string was 1:1 identical to Figma
+   Code panel export, but Chrome render of the 1.4px stroke with
+   extreme alpha (0.40 → 0.0001 → 0.0001 → 0.10) visually appeared
+   much weaker than Figma's reference render. Root cause: Chrome CSS
+   gradient engine vs Figma Skia GPU renderer produce different
+   antialiasing/subpixel behavior on thin-stroke + sharp-alpha cases.
+   SVG `<rect stroke="url(#linearGradient)">` paints via the same
+   Skia GPU pipeline as Figma → cross-browser render parity.
+
+   Consumer JSX requirement (see SparkMode.jsx for canonical example):
+     <aside className="glass-pane-container ...">
+       <svg className="absolute inset-0 w-full h-full pointer-events-none z-[2]">
+         <defs>
+           <linearGradient id="..." x1="0" y1="0" x2=".42" y2="1">
+             ...157deg/4-stop stops...
+           </linearGradient>
+         </defs>
+         <rect x="0" y="0" width="100%" height="100%" rx="20" ry="20"
+               fill="none" stroke="url(#...)" stroke-width="2.8" />
+       </svg>
+       <div className="relative z-[3] ...">{content}</div>
+     </aside>
+
+   Note: stroke-width="2.8" (= 2 × 1.4) because SVG stroke is centered
+   on rect boundary; half (1.4) extends outside viewport (clipped by
+   parent overflow:hidden), half (1.4) visible inside = matches Figma
+   1.4px inside-aligned stroke.
+   ─────────────────────────────────────────────────────────────────── */
+/* 2026-05-20 round-60 X1 prototype:GlassPane 重构,drop ::before/::after
+   nested stacking context barrier。 改 single layer container with backdrop-
+   filter + solid bg approximation。 让 sub-card material 4 套 blend reach
+   panel painted backdrop。
+   Trade-off:lose `mix-blend-mode: luminosity` backdrop-adaptive 效果 →
+   solid bg 30% approximation,visual ~95% Figma authority。 收益:material
+   4 套 in panel 全 work,design system uniformity。
+   Note:single backdrop-filter (不 nested) Chrome 正确 reach page bg painted。 */
+.glass-pane-container {
+  position: relative;
+  border-radius: 20px;
+  /* 2026-05-22 round-70 (Leon) — light 30%→40%。30% 反馈偏暗,40% 更接近
+     visionOS .regularMaterial 视觉权重。dark 30% 保留 (Figma authoritative)。 */
+  background-color: rgba(255, 255, 255, 0.40);  /* light: white 40% solid */
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  box-shadow: var(--glass-stroke-shadow);
+  overflow: hidden;
+}
+.dark .glass-pane-container {
+  background-color: rgba(128, 128, 128, 0.30);  /* dark: gray 30% (Figma authoritative) */
+}
+
+/* §2026-06-09 (Leon) — 高内容密度浮窗变体(opt-in modifier)。
+   Subscription modal 等密集表单浮窗在亮背景透出时,base 40% 太透 → 次级文字
+   (label-secondary/tertiary)读不清。此变体提高不透明度稳住文字对比,仍保留
+   blur(50px) 磨砂透感。`.glass-pane-container.glass-pane-solid` (0,2,0) 稳压
+   base (0,1,0);只作用于显式加了 .glass-pane-solid 的实例,不影响 SparkMode 等。 */
+.glass-pane-container.glass-pane-solid {
+  background-color: rgba(250, 250, 252, 0.85);
+}
+.dark .glass-pane-container.glass-pane-solid {
+  background-color: rgba(26, 26, 30, 0.88);
+}
+
+/* GlassPane SVG stroke stop colors — Figma authoritative (跨 light/dark).
+   2026-05-19 round-35 — light mode 用 black stroke 实测"画面很脏"
+   (Leon),撤回。Light mode 跟 dark mode 同 white stroke (Figma
+   Windows/Glass authoritative),依赖 luminosity blend + white stroke
+   在 light backdrop 上 desaturate 而非 high-contrast 重描边。
+   SVG `<stop>` 用 className → CSS `stop-color` / `stop-opacity`
+   presentation attributes,跨 browser 支持(Chrome/Safari/Firefox).
+   ───────────────────────────────────────────────────────────────────── */
+
+.glass-pane-stop-1 { stop-color: rgb(255, 255, 255); stop-opacity: 0.40; }
+.glass-pane-stop-2 { stop-color: rgb(255, 255, 255); stop-opacity: 0; }
+.glass-pane-stop-3 { stop-color: rgb(255, 255, 255); stop-opacity: 0; }
+.glass-pane-stop-4 { stop-color: rgb(255, 255, 255); stop-opacity: 0.10; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Control State Tokens — variablized
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.glass-ctrl-on {
+  --_glass-bg:         rgba(255, 255, 255, 0.72);
+  --_glass-blur:       40px;
+  --_glass-saturate:   1.8;
+  --_glass-brightness: 1.12;
+  --_glass-border:     rgba(255, 255, 255, 0.80);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.08),
+    inset 0  1px 0 rgba(255, 255, 255, 0.90),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.04);
+}
+.dark .glass-ctrl-on {
+  --_glass-bg:         rgba(255, 255, 255, 0.18);
+  --_glass-saturate:   1.6;
+  --_glass-brightness: 1.0;
+  --_glass-border:     rgba(255, 255, 255, 0.30);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.25),
+    inset 0  1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.10);
+}
+
+.glass-ctrl-off {
+  --_glass-bg:         rgba(36, 36, 36, 0.45);
+  --_glass-blur:       40px;
+  --_glass-saturate:   1.4;
+  --_glass-brightness: 0.92;
+  --_glass-border:     rgba(255, 255, 255, 0.08);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.15),
+    inset 0  1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.10);
+}
+.dark .glass-ctrl-off {
+  --_glass-bg:         rgba(36, 36, 36, 0.55);
+  --_glass-saturate:   1.3;
+  --_glass-brightness: 0.82;
+  --_glass-border:     rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.35),
+    inset 0  1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.15);
+}
+
+.glass-ctrl-icon-on {
+  --_glass-bg:         rgba(255, 255, 255, 0.35);
+  --_glass-blur:       20px;
+  --_glass-saturate:   1.6;
+  --_glass-brightness: 1.06;
+  --_glass-border:     rgba(255, 255, 255, 0.25);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    inset 0  1px 0 rgba(255, 255, 255, 0.30),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.04);
+}
+.dark .glass-ctrl-icon-on {
+  --_glass-bg:         rgba(255, 255, 255, 0.14);
+  --_glass-saturate:   1.4;
+  --_glass-brightness: 0.90;
+  --_glass-border:     rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0  1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.10);
+}
+
+.glass-ctrl-icon-off {
+  --_glass-bg:         rgba(17, 17, 17, 0.35);
+  --_glass-blur:       20px;
+  --_glass-saturate:   1.3;
+  --_glass-brightness: 0.94;
+  --_glass-border:     rgba(255, 255, 255, 0.06);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate)) brightness(var(--_glass-brightness));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:
+    inset 0  1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.08);
+}
+.dark .glass-ctrl-icon-off {
+  --_glass-bg:         rgba(17, 17, 17, 0.50);
+  --_glass-saturate:   1.2;
+  --_glass-brightness: 0.82;
+  --_glass-border:     rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0  1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Utility Sugar Tokens — variablized
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.glass-overlay {
+  --_glass-bg:       rgba(0, 0, 0, 0.30);
+  --_glass-blur:     48px;
+  --_glass-saturate: 1.4;
+  --_glass-border:   rgba(255, 255, 255, 0.10);
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur)) saturate(var(--_glass-saturate));
+  -webkit-backdrop-filter: blur(var(--_glass-blur)) saturate(var(--_glass-saturate));
+  border:                  1px solid var(--_glass-border);
+  box-shadow:              0 8px 32px rgba(0, 0, 0, 0.30);
+}
+.dark .glass-overlay {
+  --_glass-bg:       rgba(0, 0, 0, 0.40);
+  --_glass-saturate: 1.3;
+  --_glass-border:   rgba(255, 255, 255, 0.06);
+  box-shadow:              0 8px 32px rgba(0, 0, 0, 0.50);
+}
+
+.glass-chip {
+  --_glass-bg:   rgba(0, 0, 0, 0.20);
+  --_glass-blur: 8px;
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur));
+  -webkit-backdrop-filter: blur(var(--_glass-blur));
+}
+.dark .glass-chip {
+  --_glass-bg: rgba(0, 0, 0, 0.35);
+}
+
+.glass-icon-muted {
+  --_glass-bg:       rgba(255, 255, 255, 0.10);
+  --_glass-bg-hover: rgba(255, 255, 255, 0.20);
+  --_glass-blur:     8px;
+
+  background:              var(--_glass-bg);
+  backdrop-filter:         blur(var(--_glass-blur));
+  -webkit-backdrop-filter: blur(var(--_glass-blur));
+}
+.glass-icon-muted:hover {
+  background: var(--_glass-bg-hover);
+}
+
+.glass-icon-ghost {
+  --_glass-bg:       rgba(0, 0, 0, 0.10);
+  --_glass-bg-hover: rgba(0, 0, 0, 0.20);
+
+  background: var(--_glass-bg);
+}
+.glass-icon-ghost:hover {
+  background: var(--_glass-bg-hover);
+}
+.dark .glass-icon-ghost {
+  --_glass-bg:       rgba(255, 255, 255, 0.10);
+  --_glass-bg-hover: rgba(255, 255, 255, 0.20);
+}
+
+/* ── Bottom Tab Bar nav pill — BottomTabBar.jsx (Figma 51:6684)
+ * High-opacity frosted glass, optimised for legibility over any content.
+ * Light: near-opaque white frost · Dark: near-opaque dark frost            */
+.glass-nav-pill {
+  background:              rgba(248, 248, 252, 0.90);
+  backdrop-filter:         blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border:                  1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.06),
+    inset 0  1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.03);
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+.dark .glass-nav-pill {
+  background:              rgba(28, 28, 36, 0.92);
+  border:                  1px solid rgba(255, 255, 255, 0.10);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.35),
+    inset 0  1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 rgba(0,   0,   0,   0.15);
+}
+
+/* ── Performance: Touch devices — reduce blur for smooth scrolling ──────── */
+@media (pointer: coarse) {
+  .glass-regular,
+  .dark .glass-regular           { --_glass-blur: 12px; }
+  .glass-clear,
+  .dark .glass-clear     { --_glass-blur: 12px; }
+  .glass-ultra-thin,
+  .dark .glass-ultra-thin { --_glass-blur: 12px; }
+  .glass-dark,
+  .dark .glass-dark      { --_glass-blur: 12px; }
+  .glass-tinted,
+  .dark .glass-tinted    { --_glass-blur: 12px; }
+  .glass-prominent,
+  .dark .glass-prominent { --_glass-blur: 12px; }
+  .glass-morphing,
+  .dark .glass-morphing  { --_glass-blur: 12px; }
+  .glass-ctrl-on,
+  .dark .glass-ctrl-on          { --_glass-blur: 12px; }
+  .glass-ctrl-off,
+  .dark .glass-ctrl-off         { --_glass-blur: 12px; }
+  .glass-overlay,
+  .dark .glass-overlay          { --_glass-blur: 12px; }
+  .glass-frosted-edge,
+  .dark .glass-frosted-edge     { --_glass-blur: 12px; }
+  .glass-frosted-no-edge,
+  .dark .glass-frosted-no-edge  { --_glass-blur: 16px; }
+  .glass-frosted-no-edge-light  { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .glass-hero            { backdrop-filter: blur(2px) saturate(1.3); -webkit-backdrop-filter: blur(2px) saturate(1.3); }
+  .glass-pane-container::before { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  .glass-nav-pill,
+  .dark .glass-nav-pill         { backdrop-filter: blur(12px) saturate(1.3); -webkit-backdrop-filter: blur(12px) saturate(1.3); }
+  /* GPU compositing hint for fixed-position glass elements */
+  .glass-regular,
+  .glass-clear,
+  .glass-prominent,
+  .glass-overlay                { will-change: backdrop-filter; }
+}
+
+/* ── Accessibility: Reduced Transparency ─────────────────────────────────── */
+@media (prefers-reduced-transparency) {
+  .glass-regular          { background: rgba(242, 242, 247, 0.92); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-clear    { background: rgba(242, 242, 247, 0.88); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-ultra-thin { background: rgba(242, 242, 247, 0.80); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-dark     { background: rgba(28,  28,  30,  0.90); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-tinted   { background: rgba(124, 58,  237, 0.85); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-prominent{ background: rgba(242, 242, 247, 0.96); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-morphing { background: rgba(242, 242, 247, 0.94); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-ctrl-on         { background: rgba(242, 242, 247, 0.96); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-ctrl-off        { background: rgba(28,  28,  30,  0.88); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-ctrl-icon-on    { background: rgba(242, 242, 247, 0.90); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-ctrl-icon-off   { background: rgba(28,  28,  30,  0.85); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-overlay         { background: rgba(0,   0,   0,   0.80); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-chip            { background: rgba(0,   0,   0,   0.60); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-icon-muted      { background: rgba(255, 255, 255, 0.25); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-icon-ghost      { background: rgba(0,   0,   0,   0.20); }
+  .glass-frosted-edge    { background: rgba(28,  28,  30,  0.88); backdrop-filter: none; -webkit-backdrop-filter: none; border: 1px solid rgba(255, 255, 255, 0.30); }
+  .glass-frosted-no-edge { background: rgba(28,  28,  30,  0.88); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-frosted-no-edge-light { background: rgba(228, 228, 231, 0.92); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-hero {
+    background: rgba(28, 28, 30, 0.88);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  }
+  .glass-pane-container::before {
+    background: rgba(28, 28, 30, 0.88);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* ── Accessibility: Increased Contrast ───────────────────────────────────── */
+@media (prefers-contrast: more) {
+  .glass-regular          { --_glass-border: rgba(0,   0,   0,   0.40); }
+  .glass-clear    { --_glass-border: rgba(0,   0,   0,   0.35); }
+  .glass-dark     { --_glass-border: rgba(255, 255, 255, 0.55); }
+  .glass-tinted   { --_glass-border: rgba(124, 58,  237, 0.80); }
+  .glass-prominent{ --_glass-border: rgba(0,   0,   0,   0.50); }
+  .glass-morphing { --_glass-border: rgba(0,   0,   0,   0.45); }
+  .glass-ctrl-on         { --_glass-border: rgba(0,   0,   0,   0.50); }
+  .glass-ctrl-off        { --_glass-border: rgba(255, 255, 255, 0.40); }
+  .glass-ctrl-icon-on    { --_glass-border: rgba(0,   0,   0,   0.40); }
+  .glass-ctrl-icon-off   { --_glass-border: rgba(255, 255, 255, 0.35); }
+  .glass-overlay         { --_glass-border: rgba(255, 255, 255, 0.30); }
+  /* gradient border 在 prefers-contrast: more 退回 solid 高对比 */
+  .glass-frosted-edge    { background: var(--_glass-bg); border: 1px solid rgba(255, 255, 255, 0.55); }
+}

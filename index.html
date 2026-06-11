@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>UVERA</title>
+    <!-- 2026-05-09 self-hosted fonts (Latin + CJK).
+         费决策: CJK (Noto SC/TC) 也 self-host, 中国境内高速网络可接受 5-7MB。
+         仅 Latin (Inter + Crimson Pro 总 424KB) preload — first paint 不阻塞。
+         CJK 用 unicode-range 让浏览器按需 lazy fetch，不全量 preload。
+         @font-face declarations 在 src/design-system/tokens/index.css。 -->
+    <link rel="preload" href="/fonts/Inter-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/CrimsonPro-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0B0E15" />
+    <!-- W3C standard PWA capable hint (Chrome >=99 deprecated Apple-prefix variant alone).
+         Keep both: mobile-web-app-capable for Chrome/Edge/Firefox standard,
+         apple-mobile-web-app-capable still required for iOS Safari fullscreen pinned app. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="UVERA" />
+    <link rel="apple-touch-icon" href="/icons/icon-180x180.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

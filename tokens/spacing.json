@@ -1,0 +1,32 @@
+{
+  "spacing/xs": {
+    "light": "4px"
+  },
+  "spacing/sm": {
+    "light": "8px"
+  },
+  "spacing/md": {
+    "light": "12px"
+  },
+  "spacing/lg": {
+    "light": "16px"
+  },
+  "spacing/xl": {
+    "light": "20px"
+  },
+  "spacing/2xl": {
+    "light": "24px"
+  },
+  "spacing/3xl": {
+    "light": "32px"
+  },
+  "spacing/4xl": {
+    "light": "40px"
+  },
+  "spacing/5xl": {
+    "light": "48px"
+  },
+  "spacing/touch/target": {
+    "light": "44px"
+  }
+}

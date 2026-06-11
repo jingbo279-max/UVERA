@@ -1,0 +1,21 @@
+{
+  // ⛔ §2026-06-10 (Leon)— 公开文档站**已整站下线**(`wrangler delete uvera-docs`),
+  //    docs 改为「本地访问(`npm run docs:dev`)/ GitHub 私有访问」。**不要再 `docs:deploy`
+  //    重新发布**,除非 Leon 明确确认。甲方交付版产品/技术文档另走 admin 内置(屏蔽公开)。
+  // §2026-05-31 — 独立 Worker 把 VitePress 静态文档站挂到 docs.uvera.ai。
+  // 跟主站 wrangler.jsonc(uvera.ai)分开,互不影响。纯静态资源,无 worker 逻辑。
+  // 部署:`npm run docs:deploy`(= vitepress build + wrangler deploy --config 本文件)。
+  // custom_domain:true → wrangler 部署时自动在 uvera.ai zone 建 docs.uvera.ai 的
+  // 路由 + DNS(无需手动加 DNS 记录)。需费的 CF 账户已 wrangler login。
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "uvera-docs",
+  "compatibility_date": "2026-05-31",
+  "assets": {
+    "directory": "./docs/.vitepress/dist",
+    // VitePress cleanUrls 生成 .html;找不到时回 404 页(非 SPA 回退)。
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "docs.uvera.ai", "custom_domain": true }
+  ]
+}
