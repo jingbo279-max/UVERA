@@ -65,3 +65,4 @@ docs/.vitepress/dist
 # Sentry build-plugin auth token(source map 上传用,本地,勿提交)
 .env.sentry-build-plugin
 .superpowers/
+.idea/
